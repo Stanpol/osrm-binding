@@ -37,6 +37,7 @@ pub struct Route {
     pub geometry: String,
     pub weight: f64,
     pub duration: f64,
+    pub distance: f64,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
