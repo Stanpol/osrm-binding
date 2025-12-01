@@ -18,11 +18,16 @@ extern "C" {
         char* message;
     };
 
-    void* osrm_create(const char* base_path, const char* algorithm) {
+    void* osrm_create(const char* base_path, const char* algorithm, int max_table_size) {
         try {
             osrm::EngineConfig config;
             config.storage_config = {base_path};
             config.use_shared_memory = false;
+            
+            // Set max locations for distance table (0 means unlimited)
+            if (max_table_size > 0) {
+                config.max_locations_distance_table = max_table_size;
+            }
 
             if (strcmp(algorithm, "CH") == 0) {
                 config.algorithm = osrm::EngineConfig::Algorithm::CH;
@@ -53,7 +58,9 @@ extern "C" {
                           const size_t* sources,
                           size_t num_sources,
                           const size_t* destinations,
-                          size_t num_destinations) {
+                          size_t num_destinations,
+                          bool include_duration,
+                          bool include_distance) {
 
         if (!osrm_instance) {
             const char* err = "OSRM instance not found";
@@ -78,6 +85,17 @@ extern "C" {
 
         if (num_destinations > 0) {
             params.destinations.assign(destinations, destinations + num_destinations);
+        }
+
+        // Set annotations based on the flags
+        if (include_duration && include_distance) {
+            params.annotations = osrm::TableParameters::AnnotationsType::All;
+        } else if (include_duration) {
+            params.annotations = osrm::TableParameters::AnnotationsType::Duration;
+        } else if (include_distance) {
+            params.annotations = osrm::TableParameters::AnnotationsType::Distance;
+        } else {
+            params.annotations = osrm::TableParameters::AnnotationsType::None;
         }
 
         osrm::json::Object result;

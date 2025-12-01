@@ -18,7 +18,7 @@ struct OsrmResult {
 
 #[link(name = "osrm_wrapper", kind = "static")]
 unsafe extern "C" {
-    fn osrm_create(base_path: *const c_char, algorithm : *const c_char) -> *mut c_void;
+    fn osrm_create(base_path: *const c_char, algorithm : *const c_char, max_table_size: i32) -> *mut c_void;
     fn osrm_destroy(osrm_instance: *mut c_void);
     fn osrm_table(
         osrm_instance: *mut c_void,
@@ -28,6 +28,8 @@ unsafe extern "C" {
         num_sources: usize,
         destinations: *const usize,
         num_destinations: usize,
+        include_duration: bool,
+        include_distance: bool,
     ) -> OsrmResult;
 
     fn osrm_trip(
@@ -49,10 +51,15 @@ pub(crate) struct Osrm {
 }
 
 impl Osrm {
+    #[allow(dead_code)]
     pub(crate) fn new(base_path: &str, algorithm: &str) -> Result<Self, String> {
+        Self::new_with_options(base_path, algorithm, 0)
+    }
+
+    pub(crate) fn new_with_options(base_path: &str, algorithm: &str, max_table_size: i32) -> Result<Self, String> {
         let c_path = CString::new(base_path).map_err(|e| e.to_string())?;
         let c_algorithm = CString::new(algorithm).map_err(|e| e.to_string())?;
-        let instance = unsafe { osrm_create(c_path.as_ptr(), c_algorithm.as_ptr()) };
+        let instance = unsafe { osrm_create(c_path.as_ptr(), c_algorithm.as_ptr(), max_table_size) };
 
         if instance.is_null() {
             Err("Failure to create an OSRM instance.".to_string())
@@ -118,6 +125,8 @@ impl Osrm {
         coordinates: &[(f64, f64)],
         sources: Option<&[usize]>,
         destinations: Option<&[usize]>,
+        include_duration: bool,
+        include_distance: bool,
     ) -> Result<String, String> {
 
         let flat_coords: Vec<f64> = coordinates.iter().flat_map(|&(lon, lat)| vec![lon, lat]).collect();
@@ -133,6 +142,8 @@ impl Osrm {
                 sources_vec.len(),
                 dests_vec.as_ptr(),
                 dests_vec.len(),
+                include_duration,
+                include_distance,
             )
         };
 

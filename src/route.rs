@@ -7,7 +7,7 @@ pub struct RouteRequest {
     pub points : Vec<Point>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[allow(dead_code)]
 pub struct SimpleRouteResponse {
     pub code: String,
@@ -15,7 +15,7 @@ pub struct SimpleRouteResponse {
     pub distance: f64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[allow(dead_code)]
 pub struct RouteResponse {
     pub code: String,

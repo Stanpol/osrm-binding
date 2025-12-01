@@ -1,17 +1,18 @@
 use derive_builder::Builder;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 pub(crate) use crate::point::Point;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[allow(dead_code)]
 pub struct TableResponse {
     pub code: String,
     pub destinations: Vec<TableLocationEntry>,
     pub durations: Vec<Vec<Option<f64>>>,
+    pub distances: Option<Vec<Vec<Option<f64>>>>,
     sources: Vec<TableLocationEntry>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[allow(dead_code)]
 pub struct TableLocationEntry {
     hint: String,
@@ -23,5 +24,9 @@ pub struct TableLocationEntry {
 #[derive(Debug, Builder, Clone)]
 pub struct TableRequest{
     pub sources: Vec<Point>,
-    pub destinations: Vec<Point>
+    pub destinations: Vec<Point>,
+    #[builder(default = "true")]
+    pub include_duration: bool,
+    #[builder(default = "true")]
+    pub include_distance: bool,
 }
