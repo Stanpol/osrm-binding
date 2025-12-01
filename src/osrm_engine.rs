@@ -15,7 +15,7 @@ pub struct OsrmEngine {
 impl OsrmEngine {
 
     pub fn new(base_path: &str, algorithm : algorithm::Algorithm, max_table_size: Option<i32>) -> Result<Self, OsrmError> {
-        let osrm = Osrm::new(base_path, algorithm.as_str(), max_table_size).map_err( |_|  OsrmError::Initialization )?;
+        let osrm = Osrm::new(base_path, algorithm.as_str(), max_table_size.unwrap_or(0)).map_err( |_|  OsrmError::Initialization )?;
         Ok(OsrmEngine {
             instance: osrm,
         })

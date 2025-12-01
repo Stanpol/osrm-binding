@@ -52,8 +52,8 @@ pub(crate) struct Osrm {
 
 impl Osrm {
     #[allow(dead_code)]
-    pub(crate) fn new(base_path: &str, algorithm: &str) -> Result<Self, String> {
-        Self::new_with_options(base_path, algorithm, 0)
+    pub(crate) fn new(base_path: &str, algorithm: &str, max_table_size: i32) -> Result<Self, String> {
+        Self::new_with_options(base_path, algorithm, max_table_size)
     }
 
     pub(crate) fn new_with_options(base_path: &str, algorithm: &str, max_table_size: i32) -> Result<Self, String> {
