@@ -134,4 +134,30 @@ mod tests {
         assert!(  700.0 < (response.distance / 1000.0)  && (response.distance  / 1000.0) < 800.0); // between 700 and 800 km (google map used)
         assert!(  27000.0 < response.durations  && response.durations < 30600.0 ); // between 7h30 and 8h30 (google map used)
     }
+
+    #[test]
+    fn it_calculates_a_trip_successfully() {
+        dotenvy::dotenv().expect(".env file could not be read");
+        let path = std::env::var("OSRM_TEST_DATA_PATH_MLD")
+            .expect("Environment variable OSRM_TEST_DATA_PATH_MLD must be defined with a french map");
+        let engine = OsrmEngine::new(&*path, Algorithm::MLD, None).expect("Failed to initialize OSRM engine");
+
+        let request = crate::trip::TripRequest {
+            points: vec![
+                Point { longitude: 2.3522, latitude: 48.8566 }, // Paris
+                Point { longitude: 5.3698, latitude: 43.2965 }, // Marseille
+                Point { longitude: 4.8357, latitude: 45.7640 }  // Lyon
+            ]
+        };
+        let response = engine.trip(request).expect("trip request failed");
+
+        assert_eq!(response.code, "Ok");
+        assert_eq!(response.trips.len(), 1, "Should have 1 trip");
+        assert_eq!(response.waypoints.len(), 3, "Should have 3 waypoints");
+        
+        let trip = &response.trips[0];
+        assert!(trip.distance > 0.0, "Trip should have positive distance");
+        assert!(trip.duration > 0.0, "Trip should have positive duration");
+        println!("Trip distance: {:.2} km, duration: {:.2} seconds", trip.distance / 1000.0, trip.duration);
+    }
 }
