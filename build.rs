@@ -22,21 +22,26 @@ fn main() {
     let osrm_source_path = find_osrm_source(&out_dir);
     eprintln!("OSRM source path: {}", osrm_source_path.display());
 
-    let cxx_flags = "-Wno-array-bounds -Wno-uninitialized -Wno-stringop-overflow -std=c++17 -Wno-error";
+    let cxx_flags = "-Wno-array-bounds -Wno-uninitialized -Wno-stringop-overflow -std=c++20 -Wno-error";
 
+    // Configure CMake with explicit TBB paths
     let dst = cmake::Config::new(&osrm_source_path)
         .env("CXXFLAGS", cxx_flags)
-        .define("CMAKE_CXX_STANDARD", "17")
+        .define("TBB_ROOT", "/usr/local")
+        .define("TBB_INCLUDE_DIR", "/usr/local/include")
+        .define("TBB_LIBRARY", "/usr/local/lib/libtbb.so")
+        .define("CMAKE_CXX_STANDARD", "20") // OSRM 6+ often handles C++20 better now
         .define("CMAKE_CXX_STANDARD_REQUIRED", "ON")
         .define("CMAKE_CXX_FLAGS_RELEASE", "-DNDEBUG")
         .define("ENABLE_ASSERTIONS", "Off")
         .define("ENABLE_LTO", "Off")
+        .define("ENABLE_MASON", "Off") // Ensure it doesn't try to download dependencies
         .build();
 
     cc::Build::new()
         .cpp(true)
         .file("src/wrapper.cpp")
-        .flag("-std=c++17")
+        .flag("-std=c++20")
         .include(dst.join("include"))
         .include(osrm_source_path.join("include"))
         .include(osrm_source_path.join("third_party/fmt/include"))
