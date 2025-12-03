@@ -13,7 +13,7 @@ fn calculate_table_successfully(c: &mut Criterion) {
     dotenv().expect(".env file could not be read");
     let path = env::var("OSRM_TEST_DATA_PATH_MLD")
         .expect("Environment variable OSRM_TEST_DATA_PATH_MLD must be defined with a french map");
-    let engine = OsrmEngine::new(&*path, Algorithm::MLD).expect("Failed to initialize OSRM engine");
+    let engine = OsrmEngine::new(&*path, Algorithm::MLD, None).expect("Failed to initialize OSRM engine");
 
     let request = TableRequest {
         sources: vec![
@@ -22,7 +22,9 @@ fn calculate_table_successfully(c: &mut Criterion) {
         destinations: vec![
             Point { longitude: 5.3698, latitude: 43.2965 }, // Marseille
             Point { longitude: 4.8357, latitude: 45.7640 }  // Lyon
-        ]
+        ],
+        include_duration: true,
+        include_distance: true,
     };
 
     c.bench_function("calculate_table_successfully", |b| {
@@ -36,7 +38,7 @@ fn calculate_route_successfully(c: &mut Criterion) {
     dotenv().expect(".env file could not be read");
     let path = env::var("OSRM_TEST_DATA_PATH_MLD")
         .expect("Environment variable OSRM_TEST_DATA_PATH_MLD must be defined with a french map");
-    let engine = OsrmEngine::new(&*path, Algorithm::MLD).expect("Failed to initialize OSRM engine");
+    let engine = OsrmEngine::new(&*path, Algorithm::MLD, None).expect("Failed to initialize OSRM engine");
 
     let request = RouteRequestBuilder::default()
         .points(vec![Point { longitude: 2.3522, latitude: 48.8566 }, Point { longitude: 5.3698, latitude: 43.2965 }])
@@ -54,7 +56,7 @@ fn calculate_simple_route_successfully(c: &mut Criterion) {
     dotenv().expect(".env file could not be read");
     let path = env::var("OSRM_TEST_DATA_PATH_MLD")
         .expect("Environment variable OSRM_TEST_DATA_PATH_MLD must be defined with a french map");
-    let engine = OsrmEngine::new(&*path, Algorithm::MLD).expect("Failed to initialize OSRM engine");
+    let engine = OsrmEngine::new(&*path, Algorithm::MLD, None).expect("Failed to initialize OSRM engine");
 
     let start = Point { longitude: 2.3522, latitude: 48.8566 };
     let end = Point { longitude: 5.3698, latitude: 43.2965 };
@@ -70,7 +72,7 @@ fn calculate_table_10_successfully_mld(c: &mut Criterion) {
     dotenv().expect(".env file could not be read");
     let path = env::var("OSRM_TEST_DATA_PATH_MLD")
         .expect("Environment variable OSRM_TEST_DATA_PATH_MLD must be defined with a french map");
-    let engine = OsrmEngine::new(&*path, Algorithm::MLD).expect("Failed to initialize OSRM engine");
+    let engine = OsrmEngine::new(&*path, Algorithm::MLD, None).expect("Failed to initialize OSRM engine");
 
     let base_lat = 48.8566;
     let base_lon = 2.3522;
@@ -83,6 +85,8 @@ fn calculate_table_10_successfully_mld(c: &mut Criterion) {
                     Point { longitude: base_lon, latitude: base_lat }
                 ],
                 destinations: (0..10).map( |_| Point { longitude: base_lon + rng.random_range(-0.1..0.1), latitude: base_lat + rng.random_range(-0.1..0.1) }).collect(),
+                include_duration: true,
+                include_distance: true,
             };
 
             let _response = engine.table(request.clone()).expect("Table request failed");
@@ -94,7 +98,7 @@ fn calculate_table_100_successfully_mld(c: &mut Criterion) {
     dotenv().expect(".env file could not be read");
     let path = env::var("OSRM_TEST_DATA_PATH_MLD")
         .expect("Environment variable OSRM_TEST_DATA_PATH_MLD must be defined with a french map");
-    let engine = OsrmEngine::new(&*path, Algorithm::MLD).expect("Failed to initialize OSRM engine");
+    let engine = OsrmEngine::new(&*path, Algorithm::MLD, None).expect("Failed to initialize OSRM engine");
 
     let base_lat = 48.8566;
     let base_lon = 2.3522;
@@ -107,6 +111,8 @@ fn calculate_table_100_successfully_mld(c: &mut Criterion) {
                     Point { longitude: base_lon, latitude: base_lat }
                 ],
                 destinations: (0..100).map( |_| Point { longitude: base_lon + rng.random_range(-0.1..0.1), latitude: base_lat + rng.random_range(-0.1..0.1) }).collect(),
+                include_duration: true,
+                include_distance: true,
             };
 
             let _response = engine.table(request.clone()).expect("Table request failed");
@@ -119,7 +125,7 @@ fn calculate_multiple_routes_around_paris_10km_mld(c: &mut Criterion) {
 
     let path = env::var("OSRM_TEST_DATA_PATH_MLD")
         .expect("Environment variable OSRM_TEST_DATA_PATH_MLD must be defined with a French map");
-    let engine = OsrmEngine::new(&*path, Algorithm::MLD)
+    let engine = OsrmEngine::new(&*path, Algorithm::MLD, None)
         .expect("Failed to initialize OSRM engine");
 
     let base_lat = 48.8566;
@@ -149,7 +155,7 @@ fn calculate_multiple_routes_around_paris_100km_mld(c: &mut Criterion) {
 
     let path = env::var("OSRM_TEST_DATA_PATH_MLD")
         .expect("Environment variable OSRM_TEST_DATA_PATH_MLD must be defined with a French map");
-    let engine = OsrmEngine::new(&*path, Algorithm::MLD)
+    let engine = OsrmEngine::new(&*path, Algorithm::MLD, None)
         .expect("Failed to initialize OSRM engine");
 
     let base_lat = 48.8566;
@@ -179,7 +185,7 @@ fn calculate_multiple_routes_around_paris_10km_ch(c: &mut Criterion) {
 
     let path = env::var("OSRM_TEST_DATA_PATH_CH")
         .expect("Environment variable OSRM_TEST_DATA_PATH_CH must be defined with a French map");
-    let engine = OsrmEngine::new(&*path, Algorithm::CH)
+    let engine = OsrmEngine::new(&*path, Algorithm::CH, None)
         .expect("Failed to initialize OSRM engine");
 
     let base_lat = 48.8566;
@@ -209,7 +215,7 @@ fn calculate_multiple_routes_around_paris_100km_ch(c: &mut Criterion) {
 
     let path = env::var("OSRM_TEST_DATA_PATH_CH")
         .expect("Environment variable OSRM_TEST_DATA_PATH_CH must be defined with a French map");
-    let engine = OsrmEngine::new(&*path, Algorithm::CH)
+    let engine = OsrmEngine::new(&*path, Algorithm::CH, None)
         .expect("Failed to initialize OSRM engine");
 
     let base_lat = 48.8566;

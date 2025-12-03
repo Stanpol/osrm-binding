@@ -8,7 +8,7 @@ fn main() {
     dotenvy::dotenv().expect(".env file could not be read");
     let path = std::env::var("OSRM_TEST_DATA_PATH_MLD")
         .expect("Environment variable OSRM_TEST_DATA_PATH_MLD must be defined with a french map");
-    let engine = OsrmEngine::new(&*path, Algorithm::MLD).expect("Failed to initialize OSRM engine");
+    let engine = OsrmEngine::new(&*path, Algorithm::MLD, None).expect("Failed to initialize OSRM engine");
 
     let start = Instant::now();  // Capture start time
     (0..100).for_each(|_| {
@@ -19,7 +19,9 @@ fn main() {
             destinations: vec![
                 Point { longitude: 5.3698, latitude: 43.2965 }, // Marseille
                 Point { longitude: 4.8357, latitude: 45.7640 }  // Lyon
-            ]
+            ],
+            include_duration: true,
+            include_distance: true,
         };
         let _ = engine.table(request).expect("Table request failed");
     });

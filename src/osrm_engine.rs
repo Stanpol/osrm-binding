@@ -98,10 +98,11 @@ mod tests {
         println!("{:?}", response.durations);
 
         assert_eq!(response.code, "Ok");
-        assert_eq!(response.durations.len(), 1, "Should have 1 row for 1 source");
-        assert_eq!(response.durations[0].len(), 2, "Should have 2 columns for 2 destinations");
-        assert!(response.durations[0][0].is_some(), "Paris-Marseille duration should exist");
-        assert!(response.durations[0][1].is_some(), "Paris-Lyon duration should exist");
+        let durations = response.durations.as_ref().expect("Durations should be present");
+        assert_eq!(durations.len(), 1, "Should have 1 row for 1 source");
+        assert_eq!(durations[0].len(), 2, "Should have 2 columns for 2 destinations");
+        assert!(durations[0][0].is_some(), "Paris-Marseille duration should exist");
+        assert!(durations[0][1].is_some(), "Paris-Lyon duration should exist");
     }
 
     #[test]

@@ -7,7 +7,9 @@ pub(crate) use crate::point::Point;
 pub struct TableResponse {
     pub code: String,
     pub destinations: Vec<TableLocationEntry>,
-    pub durations: Vec<Vec<Option<f64>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub durations: Option<Vec<Vec<Option<f64>>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub distances: Option<Vec<Vec<Option<f64>>>>,
     sources: Vec<TableLocationEntry>,
 }

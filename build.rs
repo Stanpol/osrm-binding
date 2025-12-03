@@ -22,13 +22,24 @@ fn main() {
     let osrm_source_path = find_osrm_source(&out_dir);
     eprintln!("OSRM source path: {}", osrm_source_path.display());
 
-    let cxx_flags = "-Wno-array-bounds -Wno-uninitialized -Wno-stringop-overflow -std=c++17 -Wno-error";
+    let tbb_include = "/opt/homebrew/opt/tbb/include";
+    let cxx_flags = "-Wno-array-bounds -Wno-uninitialized -Wno-stringop-overflow -Wno-suggest-destructor-override";
+
+    // Add flags that will override OSRM's strict warnings
+    let additional_cxx_flags = format!("-I{} -Wno-suggest-destructor-override -Wno-error=suggest-destructor-override", tbb_include);
 
     let dst = cmake::Config::new(&osrm_source_path)
         .env("CXXFLAGS", cxx_flags)
-        .define("CMAKE_CXX_STANDARD", "17")
+        .env("Boost_ROOT", "/opt/homebrew/opt/boost@1.85")
+        .env("TBB_ROOT", "/opt/homebrew/opt/tbb")
+        .define("CMAKE_PREFIX_PATH", "/opt/homebrew/opt/boost@1.85;/opt/homebrew/opt/tbb")
+        .define("TBB_DIR", "/opt/homebrew/opt/tbb/lib/cmake/TBB")
+        .define("TBB_ROOT", "/opt/homebrew/opt/tbb")
+        .cflag(format!("-I{}", tbb_include))
+        .cxxflag(&additional_cxx_flags)
+        .define("CMAKE_CXX_STANDARD", "20")
         .define("CMAKE_CXX_STANDARD_REQUIRED", "ON")
-        .define("CMAKE_CXX_FLAGS_RELEASE", "-DNDEBUG")
+        .define("CMAKE_CXX_FLAGS_RELEASE", &format!("-DNDEBUG {}", additional_cxx_flags))
         .define("ENABLE_ASSERTIONS", "Off")
         .define("ENABLE_LTO", "Off")
         .build();
@@ -36,15 +47,22 @@ fn main() {
     cc::Build::new()
         .cpp(true)
         .file("src/wrapper.cpp")
-        .flag("-std=c++17")
+        .flag("-std=c++20")
         .include(dst.join("include"))
         .include(osrm_source_path.join("include"))
         .include(osrm_source_path.join("third_party/fmt/include"))
+        .include("/opt/homebrew/opt/boost@1.85/include")
+        .include("/opt/homebrew/opt/tbb/include")
         .define("FMT_HEADER_ONLY", None)
         .compile("osrm_wrapper");
 
     let lib_path = dst.join("lib");
     println!("cargo:rustc-link-search=native={}", lib_path.display());
+    
+    // Add Homebrew library paths for Boost, TBB, and other dependencies
+    println!("cargo:rustc-link-search=native=/opt/homebrew/opt/boost@1.85/lib");
+    println!("cargo:rustc-link-search=native=/opt/homebrew/opt/tbb/lib");
+    println!("cargo:rustc-link-search=native=/opt/homebrew/lib");
 
     println!("cargo:rustc-link-lib=static=osrm_wrapper");
     println!("cargo:rustc-link-lib=static=osrm");
@@ -61,7 +79,7 @@ fn main() {
     println!("cargo:rustc-link-lib=dylib=boost_iostreams");
     println!("cargo:rustc-link-lib=dylib=tbb");
     println!("cargo:rustc-link-lib=dylib=fmt");
-    println!("cargo:rustc-link-lib=dylib=stdc++");
+    println!("cargo:rustc-link-lib=dylib=c++");
 
     println!("cargo:rustc-link-lib=dylib=z");
     println!("cargo:rustc-link-lib=dylib=bz2");
