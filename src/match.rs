@@ -1,6 +1,7 @@
 // match.rs
 use crate::point::Point;
-use crate::route::RouteResponse;
+use crate::route::Route;
+use crate::waypoints::Waypoint;
 use serde::{Deserialize, Serialize};
 
 /// Request for map matching GPS traces to the road network
@@ -30,8 +31,32 @@ pub struct MatchRequest {
     pub snapping: Option<String>,
 }
 
+/// A matched route segment with confidence score
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Matching {
+    /// The matched route legs
+    pub legs: Vec<crate::route::Leg>,
+    /// Name of the weight profile
+    pub weight_name: String,
+    /// Geometry of the matched route
+    pub geometry: String,
+    /// Total weight of the matched route
+    pub weight: f64,
+    /// Total duration in seconds
+    pub duration: f64,
+    /// Total distance in meters
+    pub distance: f64,
+    /// Confidence score for this matching (0.0 to 1.0)
+    pub confidence: f64,
+}
+
 /// Response from a map matching request
-/// 
-/// The response uses the same structure as RouteResponse, but with matchings
-/// instead of routes, and tracepoints instead of waypoints
-pub type MatchResponse = RouteResponse;
+#[derive(Debug, Deserialize, Serialize)]
+pub struct MatchResponse {
+    /// Status code
+    pub code: String,
+    /// Array of matched route segments
+    pub matchings: Vec<Matching>,
+    /// Array of tracepoints (matched waypoints, can be null for unmatched points)
+    pub tracepoints: Vec<Option<Waypoint>>,
+}
