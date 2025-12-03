@@ -6,6 +6,7 @@ pub mod point;
 pub mod route;
 pub mod waypoints;
 pub mod osrm_engine;
+pub mod r#match;
 // src/lib.rs
 use std::ffi::{c_void, CStr, CString};
 use std::os::raw::c_char;
@@ -75,6 +76,29 @@ unsafe extern "C" {
         coordinates: *const f64,
         num_coordinates: usize
     ) -> OsrmResult;
+    
+    fn osrm_match(
+        osrm_instance: *mut c_void,
+        coordinates: *const f64,
+        num_coordinates: usize,
+        timestamps: *const u32,
+        num_timestamps: usize,
+        radiuses: *const f64,
+        num_radiuses: usize,
+        bearings: *const f64,
+        num_bearings: usize,
+        hints: *const *const c_char,
+        num_hints: usize,
+        generate_hints: bool,
+        approaches: *const *const c_char,
+        num_approaches: usize,
+        gaps: *const c_char,
+        tidy: bool,
+        waypoints: *const usize,
+        num_waypoints: usize,
+        snapping: *const c_char,
+    ) -> OsrmResult;
+    
     fn osrm_free_string(s: *mut c_char);
 }
 
@@ -352,6 +376,110 @@ impl Osrm {
                 fallback_speed.unwrap_or(-1.0),
                 fallback_coordinate_ptr,
                 scale_factor.unwrap_or(-1.0),
+                snapping_ptr,
+            )
+        };
+
+        let message_ptr = result.message;
+        if message_ptr.is_null() {
+            return Err("OSRM returned a null message".to_string());
+        }
+
+        let c_str = unsafe { CStr::from_ptr(message_ptr) };
+        let rust_str = c_str.to_str().map_err(|e| e.to_string())?.to_owned();
+
+        unsafe {
+            osrm_free_string(message_ptr);
+        }
+
+        if result.code != 0 {
+            return Err(format!("OSRM error: {}", rust_str));
+        }
+
+        Ok(rust_str)
+    }
+
+    pub(crate) fn match_route(
+        &self,
+        coordinates: &[(f64, f64)],
+        timestamps: Option<&[u32]>,
+        radiuses: Option<&[f64]>,
+        bearings: Option<&[(f64, f64)]>,
+        hints: Option<&[Option<String>]>,
+        generate_hints: bool,
+        approaches: Option<&[Option<String>]>,
+        gaps: Option<&str>,
+        tidy: bool,
+        waypoints: Option<&[usize]>,
+        snapping: Option<&str>,
+    ) -> Result<String, String> {
+
+        let flat_coords: Vec<f64> = coordinates.iter().flat_map(|&(lon, lat)| vec![lon, lat]).collect();
+
+        // Prepare timestamps
+        let timestamps_vec: Vec<u32> = timestamps.map(|t| t.to_vec()).unwrap_or_default();
+
+        // Prepare radiuses
+        let radiuses_vec: Vec<f64> = radiuses.map(|r| r.to_vec()).unwrap_or_default();
+
+        // Prepare bearings
+        let bearings_flat: Vec<f64> = if let Some(b) = bearings {
+            b.iter().flat_map(|&(value, range)| vec![value, range]).collect()
+        } else {
+            vec![]
+        };
+
+        // Prepare hints as C strings
+        let hints_cstrings: Vec<CString> = if let Some(h) = hints {
+            h.iter().filter_map(|opt| {
+                opt.as_ref().and_then(|s| CString::new(s.as_str()).ok())
+            }).collect()
+        } else {
+            vec![]
+        };
+        let hints_ptrs: Vec<*const c_char> = hints_cstrings.iter().map(|cs| cs.as_ptr()).collect();
+
+        // Prepare approaches as C strings
+        let approaches_cstrings: Vec<CString> = if let Some(a) = approaches {
+            a.iter().filter_map(|opt| {
+                opt.as_ref().and_then(|s| CString::new(s.as_str()).ok())
+            }).collect()
+        } else {
+            vec![]
+        };
+        let approaches_ptrs: Vec<*const c_char> = approaches_cstrings.iter().map(|cs| cs.as_ptr()).collect();
+
+        // Prepare gaps
+        let gaps_cstring = gaps.and_then(|s| CString::new(s).ok());
+        let gaps_ptr = gaps_cstring.as_ref().map(|cs| cs.as_ptr()).unwrap_or(std::ptr::null());
+
+        // Prepare waypoints
+        let waypoints_vec: Vec<usize> = waypoints.map(|w| w.to_vec()).unwrap_or_default();
+
+        // Prepare snapping
+        let snapping_cstring = snapping.and_then(|s| CString::new(s).ok());
+        let snapping_ptr = snapping_cstring.as_ref().map(|cs| cs.as_ptr()).unwrap_or(std::ptr::null());
+
+        let result = unsafe {
+            osrm_match(
+                self.instance,
+                flat_coords.as_ptr(),
+                coordinates.len(),
+                if timestamps_vec.is_empty() { std::ptr::null() } else { timestamps_vec.as_ptr() },
+                timestamps_vec.len(),
+                if radiuses_vec.is_empty() { std::ptr::null() } else { radiuses_vec.as_ptr() },
+                radiuses_vec.len(),
+                if bearings_flat.is_empty() { std::ptr::null() } else { bearings_flat.as_ptr() },
+                bearings_flat.len() / 2,
+                if hints_ptrs.is_empty() { std::ptr::null() } else { hints_ptrs.as_ptr() },
+                hints_ptrs.len(),
+                generate_hints,
+                if approaches_ptrs.is_empty() { std::ptr::null() } else { approaches_ptrs.as_ptr() },
+                approaches_ptrs.len(),
+                gaps_ptr,
+                tidy,
+                if waypoints_vec.is_empty() { std::ptr::null() } else { waypoints_vec.as_ptr() },
+                waypoints_vec.len(),
                 snapping_ptr,
             )
         };

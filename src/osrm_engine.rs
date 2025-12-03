@@ -7,6 +7,7 @@ use crate::point::Point;
 use crate::route::{RouteRequest, RouteResponse, SimpleRouteResponse};
 use crate::tables::{TableRequest, TableResponse};
 use crate::trip::{TripRequest, TripResponse};
+use crate::r#match::{MatchRequest, MatchResponse};
 
 pub struct OsrmEngine {
     instance: Osrm,
@@ -99,6 +100,45 @@ impl OsrmEngine {
             distance : route_response.routes.first().unwrap().legs.first().unwrap().distance,
             durations : route_response.routes.first().unwrap().legs.first().unwrap().duration
         })
+    }
+
+    pub fn match_route(&self, match_request: MatchRequest) -> Result<MatchResponse, OsrmError> {
+        let len = match_request.points.len();
+        if len == 0 {
+            return Err(OsrmError::InvalidTableArgument);
+        }
+        
+        let coordinates: Vec<(f64, f64)> = match_request.points.iter()
+            .map(|p| (p.longitude, p.latitude))
+            .collect();
+        
+        // Prepare bearings
+        let bearings_vec: Option<Vec<(f64, f64)>> = match_request.bearings.as_ref().map(|bearings| {
+            bearings.iter().map(|b| {
+                b.map(|(v, r)| (v as f64, r as f64)).unwrap_or((-1.0, -1.0))
+            }).collect()
+        });
+        
+        // Prepare radiuses
+        let radiuses_vec: Option<Vec<f64>> = match_request.radiuses.as_ref().map(|radiuses| {
+            radiuses.iter().map(|r| r.unwrap_or(-1.0)).collect()
+        });
+        
+        let result = self.instance.match_route(
+            &coordinates,
+            match_request.timestamps.as_deref(),
+            radiuses_vec.as_deref(),
+            bearings_vec.as_deref(),
+            match_request.hints.as_deref(),
+            match_request.generate_hints,
+            match_request.approaches.as_deref(),
+            match_request.gaps.as_deref(),
+            match_request.tidy,
+            match_request.waypoints.as_deref(),
+            match_request.snapping.as_deref(),
+        ).map_err(|e| OsrmError::FfiError(e))?;
+        
+        serde_json::from_str::<MatchResponse>(&result).map_err(|e| OsrmError::JsonParse(e))
     }
 }
 
