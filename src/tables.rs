@@ -17,7 +17,8 @@ pub struct TableResponse {
 #[derive(Debug, Deserialize, Serialize)]
 #[allow(dead_code)]
 pub struct TableLocationEntry {
-    hint: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    hint: Option<String>,
     location: [f64; 2],
     name: String,
     distance: f64,
@@ -25,10 +26,31 @@ pub struct TableLocationEntry {
 
 #[derive(Debug, Builder, Clone)]
 pub struct TableRequest{
-    pub sources: Vec<Point>,
-    pub destinations: Vec<Point>,
+    pub coordinates: Vec<(f64, f64)>,
     #[builder(default = "true")]
     pub include_duration: bool,
     #[builder(default = "true")]
     pub include_distance: bool,
+    #[builder(default)]
+    pub bearings: Option<Vec<Option<(i16, i16)>>>,
+    #[builder(default)]
+    pub radiuses: Option<Vec<Option<f64>>>,
+    #[builder(default)]
+    pub hints: Option<Vec<Option<String>>>,
+    #[builder(default = "true")]
+    pub generate_hints: bool,
+    #[builder(default)]
+    pub sources_indices: Option<Vec<usize>>,
+    #[builder(default)]
+    pub destinations_indices: Option<Vec<usize>>,
+    #[builder(default)]
+    pub approaches: Option<Vec<Option<String>>>,
+    #[builder(default)]
+    pub fallback_speed: Option<f64>,
+    #[builder(default)]
+    pub fallback_coordinate: Option<String>,
+    #[builder(default)]
+    pub scale_factor: Option<f64>,
+    #[builder(default)]
+    pub snapping: Option<String>,
 }

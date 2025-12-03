@@ -10,6 +10,7 @@
 #include <string>
 #include <iostream>
 #include <cstdlib>
+#include <cstring>
 
 extern "C" {
 
@@ -18,25 +19,87 @@ extern "C" {
         char* message;
     };
 
-    void* osrm_create(const char* base_path, const char* algorithm, int max_table_size) {
+    struct OSRM_Config {
+        const char* algorithm;
+        bool shared_memory;
+        const char* dataset_name;
+        bool mmap_memory;
+        const char* path;
+        int disable_feature_dataset_flags; // Bitfield: 1=ROUTE_STEPS, 2=ROUTE_GEOMETRY
+        int max_locations_trip;
+        int max_locations_viaroute;
+        int max_locations_distance_table;
+        int max_locations_map_matching;
+        double max_radius_map_matching;
+        int max_results_nearest;
+        int max_alternatives;
+        double default_radius;
+    };
+
+    void* osrm_create_with_config(const OSRM_Config* user_config) {
         try {
             osrm::EngineConfig config;
-            config.storage_config = {base_path};
-            config.use_shared_memory = false;
             
-            // Set max locations for distance table (0 means unlimited)
-            if (max_table_size > 0) {
-                config.max_locations_distance_table = max_table_size;
+            // Set algorithm
+            if (user_config->algorithm != nullptr) {
+                if (strcmp(user_config->algorithm, "CH") == 0) {
+                    config.algorithm = osrm::EngineConfig::Algorithm::CH;
+                } else if (strcmp(user_config->algorithm, "MLD") == 0) {
+                    config.algorithm = osrm::EngineConfig::Algorithm::MLD;
+                } else {
+                    config.algorithm = osrm::EngineConfig::Algorithm::MLD;
+                }
             }
-
-            if (strcmp(algorithm, "CH") == 0) {
-                config.algorithm = osrm::EngineConfig::Algorithm::CH;
+            
+            // Set storage configuration
+            config.use_shared_memory = user_config->shared_memory;
+            
+            // Note: memory_file is a path, not a boolean. If mmap_memory is true,
+            // set it to the same path as storage_config
+            if (user_config->dataset_name != nullptr && strlen(user_config->dataset_name) > 0) {
+                config.dataset_name = std::string(user_config->dataset_name);
             }
-            else if (strcmp(algorithm, "MLD") == 0) {
-                config.algorithm = osrm::EngineConfig::Algorithm::MLD;
+            
+            if (user_config->path != nullptr && strlen(user_config->path) > 0) {
+                std::string path_str(user_config->path);
+                config.storage_config = {path_str};
+                
+                // If mmap_memory is enabled, set memory_file to the path
+                if (user_config->mmap_memory) {
+                    config.memory_file = path_str;
+                }
             }
-            else {
-               config.algorithm = osrm::EngineConfig::Algorithm::MLD;
+            
+            // Note: load_steps and load_geometry don't exist in OSRM v6.0.0
+            // The disable_feature_dataset option is not supported in this version
+            // These features may be available in newer OSRM versions
+            
+            // Set max locations
+            if (user_config->max_locations_trip > 0) {
+                config.max_locations_trip = user_config->max_locations_trip;
+            }
+            if (user_config->max_locations_viaroute > 0) {
+                config.max_locations_viaroute = user_config->max_locations_viaroute;
+            }
+            if (user_config->max_locations_distance_table > 0) {
+                config.max_locations_distance_table = user_config->max_locations_distance_table;
+            }
+            if (user_config->max_locations_map_matching > 0) {
+                config.max_locations_map_matching = user_config->max_locations_map_matching;
+            }
+            
+            // Set max radius and results
+            if (user_config->max_radius_map_matching > 0) {
+                config.max_radius_map_matching = user_config->max_radius_map_matching;
+            }
+            if (user_config->max_results_nearest > 0) {
+                config.max_results_nearest = user_config->max_results_nearest;
+            }
+            if (user_config->max_alternatives > 0) {
+                config.max_alternatives = user_config->max_alternatives;
+            }
+            if (user_config->default_radius > 0) {
+                config.default_radius = user_config->default_radius;
             }
 
             return new osrm::OSRM(config);
@@ -44,6 +107,27 @@ extern "C" {
             std::cerr << "Fail to create an OSRM instance: " << e.what() << std::endl;
             return nullptr;
         }
+    }
+
+    // Backward compatibility function
+    void* osrm_create(const char* base_path, const char* algorithm, int max_table_size) {
+        OSRM_Config config = {};
+        config.algorithm = algorithm;
+        config.shared_memory = false;
+        config.dataset_name = nullptr;
+        config.mmap_memory = false;
+        config.path = base_path;
+        config.disable_feature_dataset_flags = 0;
+        config.max_locations_trip = 0;
+        config.max_locations_viaroute = 0;
+        config.max_locations_distance_table = max_table_size;
+        config.max_locations_map_matching = 0;
+        config.max_radius_map_matching = 0;
+        config.max_results_nearest = 0;
+        config.max_alternatives = 0;
+        config.default_radius = 0;
+        
+        return osrm_create_with_config(&config);
     }
 
     void osrm_destroy(void* osrm_instance) {
@@ -60,7 +144,20 @@ extern "C" {
                           const size_t* destinations,
                           size_t num_destinations,
                           bool include_duration,
-                          bool include_distance) {
+                          bool include_distance,
+                          const double* bearings,
+                          size_t num_bearings,
+                          const double* radiuses,
+                          size_t num_radiuses,
+                          const char** hints,
+                          size_t num_hints,
+                          bool generate_hints,
+                          const char** approaches,
+                          size_t num_approaches,
+                          double fallback_speed,
+                          const char* fallback_coordinate,
+                          double scale_factor,
+                          const char* snapping) {
 
         if (!osrm_instance) {
             const char* err = "OSRM instance not found";
@@ -96,6 +193,93 @@ extern "C" {
             params.annotations = osrm::TableParameters::AnnotationsType::Distance;
         } else {
             params.annotations = osrm::TableParameters::AnnotationsType::None;
+        }
+
+        // Set bearings
+        if (num_bearings > 0 && bearings != nullptr) {
+            for (size_t i = 0; i < num_bearings; ++i) {
+                if (bearings[i * 2] >= 0) {  // Check for valid bearing
+                    params.bearings.push_back(osrm::engine::Bearing{
+                        static_cast<short>(bearings[i * 2]),
+                        static_cast<short>(bearings[i * 2 + 1])
+                    });
+                } else {
+                    params.bearings.push_back(std::nullopt);
+                }
+            }
+        }
+
+        // Set radiuses
+        if (num_radiuses > 0 && radiuses != nullptr) {
+            for (size_t i = 0; i < num_radiuses; ++i) {
+                if (radiuses[i] >= 0) {
+                    params.radiuses.push_back(radiuses[i]);
+                } else {
+                    params.radiuses.push_back(std::nullopt);
+                }
+            }
+        }
+
+        // Set hints
+        if (num_hints > 0 && hints != nullptr) {
+            for (size_t i = 0; i < num_hints; ++i) {
+                if (hints[i] != nullptr && strlen(hints[i]) > 0) {
+                    params.hints.push_back(osrm::engine::Hint::FromBase64(hints[i]));
+                } else {
+                    params.hints.push_back(std::nullopt);
+                }
+            }
+        }
+
+        // Set generate_hints
+        params.generate_hints = generate_hints;
+
+        // Set approaches
+        if (num_approaches > 0 && approaches != nullptr) {
+            for (size_t i = 0; i < num_approaches; ++i) {
+                if (approaches[i] != nullptr) {
+                    std::string approach_str(approaches[i]);
+                    if (approach_str == "curb") {
+                        params.approaches.push_back(osrm::engine::Approach::CURB);
+                    } else if (approach_str == "opposite") {
+                        params.approaches.push_back(osrm::engine::Approach::OPPOSITE);
+                    } else {
+                        params.approaches.push_back(osrm::engine::Approach::UNRESTRICTED);
+                    }
+                } else {
+                    params.approaches.push_back(std::nullopt);
+                }
+            }
+        }
+
+        // Set fallback_speed
+        if (fallback_speed > 0) {
+            params.fallback_speed = fallback_speed;
+        }
+
+        // Set fallback_coordinate
+        if (fallback_coordinate != nullptr) {
+            std::string fallback_str(fallback_coordinate);
+            if (fallback_str == "snapped") {
+                params.fallback_coordinate_type = osrm::TableParameters::FallbackCoordinateType::Snapped;
+            } else {
+                params.fallback_coordinate_type = osrm::TableParameters::FallbackCoordinateType::Input;
+            }
+        }
+
+        // Set scale_factor
+        if (scale_factor > 0) {
+            params.scale_factor = scale_factor;
+        }
+
+        // Set snapping
+        if (snapping != nullptr) {
+            std::string snapping_str(snapping);
+            if (snapping_str == "any") {
+                params.snapping = osrm::TableParameters::SnappingType::Any;
+            } else {
+                params.snapping = osrm::TableParameters::SnappingType::Default;
+            }
         }
 
         osrm::json::Object result;
