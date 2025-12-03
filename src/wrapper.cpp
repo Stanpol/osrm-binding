@@ -7,6 +7,7 @@
 #include <osrm/route_parameters.hpp>
 #include <osrm/trip_parameters.hpp>
 #include <osrm/match_parameters.hpp>
+#include <osrm/nearest_parameters.hpp>
 
 #include <string>
 #include <iostream>
@@ -544,6 +545,144 @@ extern "C" {
 
         osrm::json::Object result;
         const auto status = osrm_ptr->Match(params, result);
+
+        std::string result_str;
+        int code;
+
+        if (status == osrm::Status::Ok) {
+            code = 0;
+            osrm::util::json::render(result_str, result);
+        } else {
+            code = 1;
+            try {
+                result_str = std::get<osrm::util::json::String>(result.values.at("message")).value;
+            } catch (const std::exception& e) {
+                result_str = "Unknown OSRM error";
+            }
+        }
+
+        char* message = new char[result_str.length() + 1];
+        strcpy(message, result_str.c_str());
+
+        return {code, message};
+    }
+
+    OSRM_Result osrm_nearest(
+        void* osrm_instance,
+        const double* coordinates,
+        size_t num_coordinates,
+        const double* bearings,
+        size_t num_bearings,
+        const double* radiuses,
+        size_t num_radiuses,
+        const char* const* hints,
+        size_t num_hints,
+        bool generate_hints,
+        int number,
+        const char* const* approaches,
+        size_t num_approaches,
+        const char* snapping
+    ) {
+        if (!osrm_instance) {
+            const char* err = "OSRM instance not found";
+            char* msg = new char[strlen(err) + 1];
+            strcpy(msg, err);
+            return {1, msg};
+        }
+
+        osrm::OSRM* osrm_ptr = static_cast<osrm::OSRM*>(osrm_instance);
+        osrm::NearestParameters params;
+
+        // Set coordinates (should be exactly 1 for nearest)
+        for (size_t i = 0; i < num_coordinates; ++i) {
+            params.coordinates.push_back({
+                osrm::util::FloatLongitude{coordinates[i * 2]},
+                osrm::util::FloatLatitude{coordinates[i * 2 + 1]}
+            });
+        }
+
+        // Set number of results
+        if (number > 0) {
+            params.number_of_results = number;
+        }
+
+        // Set radiuses - must match coordinates count if provided
+        if (num_radiuses > 0 && radiuses != nullptr) {
+            if (num_radiuses == num_coordinates) {
+                for (size_t i = 0; i < num_radiuses; ++i) {
+                    if (radiuses[i] >= 0) {
+                        params.radiuses.push_back(radiuses[i]);
+                    } else {
+                        params.radiuses.push_back(std::nullopt);
+                    }
+                }
+            }
+        }
+
+        // Set bearings - must match coordinates count if provided
+        if (num_bearings > 0 && bearings != nullptr) {
+            if (num_bearings == num_coordinates) {
+                for (size_t i = 0; i < num_bearings; ++i) {
+                    if (bearings[i * 2] >= 0) {
+                        params.bearings.push_back(osrm::engine::Bearing{
+                            static_cast<short>(bearings[i * 2]),
+                            static_cast<short>(bearings[i * 2 + 1])
+                        });
+                    } else {
+                        params.bearings.push_back(std::nullopt);
+                    }
+                }
+            }
+        }
+
+        // Set hints - must match coordinates count if provided
+        if (num_hints > 0 && hints != nullptr) {
+            if (num_hints == num_coordinates) {
+                for (size_t i = 0; i < num_hints; ++i) {
+                    if (hints[i] != nullptr && strlen(hints[i]) > 0) {
+                        params.hints.push_back(osrm::engine::Hint::FromBase64(hints[i]));
+                    } else {
+                        params.hints.push_back(std::nullopt);
+                    }
+                }
+            }
+        }
+
+        // Set generate_hints
+        params.generate_hints = generate_hints;
+
+        // Set approaches - must match coordinates count if provided
+        if (num_approaches > 0 && approaches != nullptr) {
+            if (num_approaches == num_coordinates) {
+                for (size_t i = 0; i < num_approaches; ++i) {
+                    if (approaches[i] != nullptr) {
+                        std::string approach_str(approaches[i]);
+                        if (approach_str == "curb") {
+                            params.approaches.push_back(osrm::engine::Approach::CURB);
+                        } else if (approach_str == "opposite") {
+                            params.approaches.push_back(osrm::engine::Approach::OPPOSITE);
+                        } else {
+                            params.approaches.push_back(osrm::engine::Approach::UNRESTRICTED);
+                        }
+                    } else {
+                        params.approaches.push_back(std::nullopt);
+                    }
+                }
+            }
+        }
+
+        // Set snapping
+        if (snapping != nullptr) {
+            std::string snapping_str(snapping);
+            if (snapping_str == "any") {
+                params.snapping = osrm::NearestParameters::SnappingType::Any;
+            } else {
+                params.snapping = osrm::NearestParameters::SnappingType::Default;
+            }
+        }
+
+        osrm::json::Object result;
+        const auto status = osrm_ptr->Nearest(params, result);
 
         std::string result_str;
         int code;

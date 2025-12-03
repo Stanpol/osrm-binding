@@ -7,6 +7,7 @@ pub mod route;
 pub mod waypoints;
 pub mod osrm_engine;
 pub mod r#match;
+pub mod nearest;
 // src/lib.rs
 use std::ffi::{c_void, CStr, CString};
 use std::os::raw::c_char;
@@ -96,6 +97,23 @@ unsafe extern "C" {
         tidy: bool,
         waypoints: *const usize,
         num_waypoints: usize,
+        snapping: *const c_char,
+    ) -> OsrmResult;
+
+    fn osrm_nearest(
+        osrm_instance: *mut c_void,
+        coordinates: *const f64,
+        num_coordinates: usize,
+        bearings: *const f64,
+        num_bearings: usize,
+        radiuses: *const f64,
+        num_radiuses: usize,
+        hints: *const *const c_char,
+        num_hints: usize,
+        generate_hints: bool,
+        number: i32,
+        approaches: *const *const c_char,
+        num_approaches: usize,
         snapping: *const c_char,
     ) -> OsrmResult;
     
@@ -480,6 +498,92 @@ impl Osrm {
                 tidy,
                 if waypoints_vec.is_empty() { std::ptr::null() } else { waypoints_vec.as_ptr() },
                 waypoints_vec.len(),
+                snapping_ptr,
+            )
+        };
+
+        let message_ptr = result.message;
+        if message_ptr.is_null() {
+            return Err("OSRM returned a null message".to_string());
+        }
+
+        let c_str = unsafe { CStr::from_ptr(message_ptr) };
+        let rust_str = c_str.to_str().map_err(|e| e.to_string())?.to_owned();
+
+        unsafe {
+            osrm_free_string(message_ptr);
+        }
+
+        if result.code != 0 {
+            return Err(format!("OSRM error: {}", rust_str));
+        }
+
+        Ok(rust_str)
+    }
+
+    pub(crate) fn nearest(
+        &self,
+        coordinate: (f64, f64),
+        bearings: Option<&[(f64, f64)]>,
+        radiuses: Option<&[f64]>,
+        hints: Option<&[Option<String>]>,
+        generate_hints: bool,
+        number: Option<i32>,
+        approaches: Option<&[Option<String>]>,
+        snapping: Option<&str>,
+    ) -> Result<String, String> {
+        // Note: nearest only takes a single coordinate
+        let flat_coords: Vec<f64> = vec![coordinate.0, coordinate.1];
+
+        // Prepare bearings
+        let bearings_flat: Vec<f64> = if let Some(b) = bearings {
+            b.iter().flat_map(|&(value, range)| vec![value, range]).collect()
+        } else {
+            vec![]
+        };
+
+        // Prepare radiuses
+        let radiuses_vec: Vec<f64> = radiuses.map(|r| r.to_vec()).unwrap_or_default();
+
+        // Prepare hints as C strings
+        let hints_cstrings: Vec<CString> = if let Some(h) = hints {
+            h.iter().filter_map(|opt| {
+                opt.as_ref().and_then(|s| CString::new(s.as_str()).ok())
+            }).collect()
+        } else {
+            vec![]
+        };
+        let hints_ptrs: Vec<*const c_char> = hints_cstrings.iter().map(|cs| cs.as_ptr()).collect();
+
+        // Prepare approaches as C strings
+        let approaches_cstrings: Vec<CString> = if let Some(a) = approaches {
+            a.iter().filter_map(|opt| {
+                opt.as_ref().and_then(|s| CString::new(s.as_str()).ok())
+            }).collect()
+        } else {
+            vec![]
+        };
+        let approaches_ptrs: Vec<*const c_char> = approaches_cstrings.iter().map(|cs| cs.as_ptr()).collect();
+
+        // Prepare snapping
+        let snapping_cstring = snapping.and_then(|s| CString::new(s).ok());
+        let snapping_ptr = snapping_cstring.as_ref().map(|cs| cs.as_ptr()).unwrap_or(std::ptr::null());
+
+        let result = unsafe {
+            osrm_nearest(
+                self.instance,
+                flat_coords.as_ptr(),
+                1, // Only 1 coordinate for nearest
+                if bearings_flat.is_empty() { std::ptr::null() } else { bearings_flat.as_ptr() },
+                bearings_flat.len() / 2,
+                if radiuses_vec.is_empty() { std::ptr::null() } else { radiuses_vec.as_ptr() },
+                radiuses_vec.len(),
+                if hints_ptrs.is_empty() { std::ptr::null() } else { hints_ptrs.as_ptr() },
+                hints_ptrs.len(),
+                generate_hints,
+                number.unwrap_or(1),
+                if approaches_ptrs.is_empty() { std::ptr::null() } else { approaches_ptrs.as_ptr() },
+                approaches_ptrs.len(),
                 snapping_ptr,
             )
         };

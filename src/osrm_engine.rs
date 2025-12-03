@@ -8,6 +8,7 @@ use crate::route::{RouteRequest, RouteResponse, SimpleRouteResponse};
 use crate::tables::{TableRequest, TableResponse};
 use crate::trip::{TripRequest, TripResponse};
 use crate::r#match::{MatchRequest, MatchResponse};
+use crate::nearest::{NearestRequest, NearestResponse};
 
 pub struct OsrmEngine {
     instance: Osrm,
@@ -139,6 +140,38 @@ impl OsrmEngine {
         ).map_err(|e| OsrmError::FfiError(e))?;
         
         serde_json::from_str::<MatchResponse>(&result).map_err(|e| OsrmError::JsonParse(e))
+    }
+
+    pub fn nearest(&self, nearest_request: NearestRequest) -> Result<NearestResponse, OsrmError> {
+        let coordinate = (nearest_request.coordinate.longitude, nearest_request.coordinate.latitude);
+        
+        // Prepare bearings
+        let bearings_vec: Option<Vec<(f64, f64)>> = nearest_request.bearings.as_ref().map(|bearings| {
+            bearings.iter().map(|b| {
+                b.map(|(v, r)| (v as f64, r as f64)).unwrap_or((-1.0, -1.0))
+            }).collect()
+        });
+        
+        // Prepare radiuses
+        let radiuses_vec: Option<Vec<f64>> = nearest_request.radiuses.as_ref().map(|radiuses| {
+            radiuses.iter().map(|r| r.unwrap_or(-1.0)).collect()
+        });
+        
+        // Prepare approaches
+        let approaches_vec: Option<Vec<Option<String>>> = nearest_request.approaches.clone();
+        
+        let result = self.instance.nearest(
+            coordinate,
+            bearings_vec.as_deref(),
+            radiuses_vec.as_deref(),
+            nearest_request.hints.as_deref(),
+            nearest_request.generate_hints,
+            nearest_request.number,
+            approaches_vec.as_deref(),
+            nearest_request.snapping.as_deref(),
+        ).map_err(|e| OsrmError::FfiError(e))?;
+        
+        serde_json::from_str::<NearestResponse>(&result).map_err(|e| OsrmError::JsonParse(e))
     }
 }
 
