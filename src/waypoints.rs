@@ -38,8 +38,10 @@ pub struct Waypoint {
     pub hint: Option<String>,
     pub location: [f64; 2],
     pub name: String,
-    pub distance: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub distance: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     #[serde(deserialize_with = "deserialize_nodes")]
     pub nodes: Option<Vec<u64>>,
 }
