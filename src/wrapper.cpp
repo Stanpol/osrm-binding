@@ -331,7 +331,8 @@ extern "C" {
                            const char* const* exclude,
                            size_t num_exclude,
                            const size_t* waypoints,
-                           size_t num_waypoints)
+                           size_t num_waypoints,
+                           bool skip_waypoints)
     {
         if (!osrm_instance) {
             const char* err = "OSRM instance not found";
@@ -519,6 +520,9 @@ extern "C" {
             }
         }
 
+        // Set skip_waypoints
+        params.skip_waypoints = skip_waypoints;
+
         osrm::json::Object result;
         const auto status = osrm_ptr->Route(params, result);
 
@@ -688,24 +692,38 @@ extern "C" {
 
             // Set annotations
             if (num_annotations > 0 && annotations != nullptr) {
+                params.annotations = true;
+                params.annotations_type = osrm::RouteParameters::AnnotationsType::None;
+                
                 for (size_t i = 0; i < num_annotations; ++i) {
                     if (annotations[i] != nullptr) {
                         std::string annotation(annotations[i]);
-                        if (annotation == "duration") {
-                            params.annotations |= osrm::RouteParameters::AnnotationsType::Duration;
+                        if (annotation == "true" || annotation == "all") {
+                            params.annotations_type = osrm::RouteParameters::AnnotationsType::All;
+                            break;
+                        } else if (annotation == "duration") {
+                            params.annotations_type = static_cast<osrm::RouteParameters::AnnotationsType>(
+                                static_cast<int>(params.annotations_type) | static_cast<int>(osrm::RouteParameters::AnnotationsType::Duration));
                         } else if (annotation == "distance") {
-                            params.annotations |= osrm::RouteParameters::AnnotationsType::Distance;
+                            params.annotations_type = static_cast<osrm::RouteParameters::AnnotationsType>(
+                                static_cast<int>(params.annotations_type) | static_cast<int>(osrm::RouteParameters::AnnotationsType::Distance));
                         } else if (annotation == "speed") {
-                            params.annotations |= osrm::RouteParameters::AnnotationsType::Speed;
+                            params.annotations_type = static_cast<osrm::RouteParameters::AnnotationsType>(
+                                static_cast<int>(params.annotations_type) | static_cast<int>(osrm::RouteParameters::AnnotationsType::Speed));
                         } else if (annotation == "weight") {
-                            params.annotations |= osrm::RouteParameters::AnnotationsType::Weight;
+                            params.annotations_type = static_cast<osrm::RouteParameters::AnnotationsType>(
+                                static_cast<int>(params.annotations_type) | static_cast<int>(osrm::RouteParameters::AnnotationsType::Weight));
                         } else if (annotation == "datasources") {
-                            params.annotations |= osrm::RouteParameters::AnnotationsType::Datasources;
+                            params.annotations_type = static_cast<osrm::RouteParameters::AnnotationsType>(
+                                static_cast<int>(params.annotations_type) | static_cast<int>(osrm::RouteParameters::AnnotationsType::Datasources));
                         } else if (annotation == "nodes") {
-                            params.annotations |= osrm::RouteParameters::AnnotationsType::Nodes;
+                            params.annotations_type = static_cast<osrm::RouteParameters::AnnotationsType>(
+                                static_cast<int>(params.annotations_type) | static_cast<int>(osrm::RouteParameters::AnnotationsType::Nodes));
                         }
                     }
                 }
+            } else {
+                params.annotations = false;
             }
 
             // Set geometries

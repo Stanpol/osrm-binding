@@ -117,6 +117,7 @@ unsafe extern "C" {
         num_exclude: usize,
         waypoints: *const usize,
         num_waypoints: usize,
+        skip_waypoints: bool,
     ) -> OsrmResult;
     
     fn osrm_match(
@@ -472,6 +473,7 @@ impl Osrm {
         continue_straight: bool,
         exclude: Option<&[String]>,
         waypoints: Option<&[usize]>,
+        skip_waypoints: bool,
     ) -> Result<String, String> {
         let coords: Vec<f64> = coordinates.iter().flat_map(|&(lon, lat)| vec![lon, lat]).collect();
         
@@ -578,6 +580,7 @@ impl Osrm {
                 num_exclude,
                 waypoints_ptr,
                 num_waypoints,
+                skip_waypoints,
             )
         };
 

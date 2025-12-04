@@ -37,6 +37,8 @@ pub struct RouteRequest {
     pub exclude: Option<Vec<String>>,
     #[builder(default)]
     pub waypoints: Option<Vec<usize>>,
+    #[builder(default = "false")]
+    pub skip_waypoints: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -52,7 +54,8 @@ pub struct SimpleRouteResponse {
 pub struct RouteResponse {
     pub code: String,
     pub routes: Vec<Route>,
-    pub waypoints: Vec<Waypoint>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub waypoints: Option<Vec<Waypoint>>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -97,8 +100,44 @@ pub struct Annotation {
     pub weight: Option<Vec<f64>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub datasources: Option<Vec<u32>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", default, deserialize_with = "deserialize_nodes_optional")]
     pub nodes: Option<Vec<i64>>,  // Use i64 for large OSM node IDs
+}
+
+fn deserialize_nodes_optional<'de, D>(deserializer: D) -> Result<Option<Vec<i64>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::{Deserialize, Error};
+    
+    let opt: Option<Vec<serde_json::Value>> = Option::deserialize(deserializer)?;
+    match opt {
+        Some(values) => {
+            let nodes: Result<Vec<i64>, _> = values.iter().map(|v| {
+                match v {
+                    serde_json::Value::Number(n) => {
+                        // Try to get as i64 first
+                        if let Some(i) = n.as_i64() {
+                            Ok(i)
+                        } else if let Some(u) = n.as_u64() {
+                            // If it's a u64, try to convert to i64
+                            i64::try_from(u).map_err(|_| {
+                                Error::custom(format!("Node ID {} too large for i64", u))
+                            })
+                        } else if let Some(f) = n.as_f64() {
+                            // If it's stored as float (like 10985247230.0), convert to i64
+                            Ok(f as i64)
+                        } else {
+                            Err(Error::custom("Invalid number type for node ID"))
+                        }
+                    }
+                    _ => Err(Error::custom("Node ID must be a number")),
+                }
+            }).collect();
+            Ok(Some(nodes?))
+        }
+        None => Ok(None),
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]

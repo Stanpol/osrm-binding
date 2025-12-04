@@ -110,6 +110,7 @@ impl OsrmEngine {
             route_request.continue_straight,
             route_request.exclude.as_deref(),
             route_request.waypoints.as_deref(),
+            route_request.skip_waypoints,
         ).map_err(|e| OsrmError::FfiError(e))?;
         
         serde_json::from_str::<RouteResponse>(&result).map_err(|e| OsrmError::JsonParse(e))
@@ -163,7 +164,7 @@ impl OsrmEngine {
 
     pub fn simple_route(&self, from : Point , to : Point) -> Result<SimpleRouteResponse, OsrmError> {
         let coordinates: Vec<(f64, f64)> = vec![(from.longitude, from.latitude), (to.longitude, to.latitude)];
-        let result = self.instance.route(&coordinates, None, None, None, true, None, None, false, None, None, None, None, false, None, None).map_err( |e| OsrmError::FfiError(e))?;
+        let result = self.instance.route(&coordinates, None, None, None, true, None, None, false, None, None, None, None, false, None, None, false).map_err( |e| OsrmError::FfiError(e))?;
         let route_response = serde_json::from_str::<RouteResponse>(&result).map_err(|e| OsrmError::JsonParse(e))?;
         if route_response.routes.len() == 0 {
             return Err(OsrmError::ApiError("No route were returned between those 2 points".to_owned()))
