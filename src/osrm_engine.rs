@@ -112,8 +112,36 @@ impl OsrmEngine {
         if len == 0 {
             return Err(OsrmError::InvalidTableArgument);
         }
-        let coordinates: &[(f64, f64)] =  &trip_request.points.iter().map( |p|  (p.longitude, p.latitude) ).collect::<Vec<(f64, f64)>>()[..];
-        let result = self.instance.trip(coordinates).map_err( |e| OsrmError::FfiError(e))?;
+        
+        let coordinates: Vec<(f64, f64)> = trip_request.points.iter()
+            .map(|p| (p.longitude, p.latitude))
+            .collect();
+        
+        // Prepare bearings
+        let bearings_vec: Option<Vec<(f64, f64)>> = trip_request.bearings.as_ref().map(|bearings| {
+            bearings.iter().map(|b| {
+                b.map(|(v, r)| (v as f64, r as f64)).unwrap_or((-1.0, -1.0))
+            }).collect()
+        });
+        
+        // Prepare radiuses
+        let radiuses_vec: Option<Vec<f64>> = trip_request.radiuses.as_ref().map(|radiuses| {
+            radiuses.iter().map(|r| r.unwrap_or(-1.0)).collect()
+        });
+        
+        // Prepare approaches
+        let approaches_vec: Option<Vec<Option<String>>> = trip_request.approaches.clone();
+        
+        let result = self.instance.trip(
+            &coordinates,
+            bearings_vec.as_deref(),
+            radiuses_vec.as_deref(),
+            trip_request.hints.as_deref(),
+            trip_request.generate_hints,
+            approaches_vec.as_deref(),
+            trip_request.snapping.as_deref(),
+        ).map_err(|e| OsrmError::FfiError(e))?;
+        
         serde_json::from_str::<TripResponse>(&result).map_err(|e| OsrmError::JsonParse(e))
     }
 
@@ -321,7 +349,13 @@ mod tests {
                 Point { longitude: 6.1319, latitude: 49.6116 }, // Luxembourg City
                 Point { longitude: 6.1063, latitude: 49.7508 }, // Ettelbruck
                 Point { longitude: 5.9675, latitude: 49.5009 }  // Esch-sur-Alzette
-            ]
+            ],
+            bearings: None,
+            radiuses: None,
+            hints: None,
+            generate_hints: true,
+            approaches: None,
+            snapping: None,
         };
         let response = engine.trip(request).expect("trip request failed");
 

@@ -69,7 +69,17 @@ unsafe extern "C" {
     fn osrm_trip(
         osrm_instance: *mut c_void,
         coordinates: *const f64,
-        num_coordinates: usize
+        num_coordinates: usize,
+        bearings: *const f64,
+        num_bearings: usize,
+        radiuses: *const f64,
+        num_radiuses: usize,
+        hints: *const *const c_char,
+        num_hints: usize,
+        generate_hints: bool,
+        approaches: *const *const c_char,
+        num_approaches: usize,
+        snapping: *const c_char,
     ) -> OsrmResult;
 
     fn osrm_route(
@@ -269,11 +279,79 @@ impl Osrm {
         }
     }
 
-    pub(crate) fn trip(&self, coordinates: &[(f64, f64)]) -> Result<String, String> {
+    pub(crate) fn trip(
+        &self,
+        coordinates: &[(f64, f64)],
+        bearings: Option<&[(f64, f64)]>,
+        radiuses: Option<&[f64]>,
+        hints: Option<&[Option<String>]>,
+        generate_hints: bool,
+        approaches: Option<&[Option<String>]>,
+        snapping: Option<&str>,
+    ) -> Result<String, String> {
+        let coords: Vec<f64> = coordinates.iter().flat_map(|&(lon, lat)| vec![lon, lat]).collect();
+        
+        // Prepare bearings
+        let bearings_vec = bearings.map(|b| {
+            b.iter().flat_map(|&(v, r)| vec![v, r]).collect::<Vec<f64>>()
+        });
+        let bearings_ptr = bearings_vec.as_ref().map(|v| v.as_ptr()).unwrap_or(std::ptr::null());
+        let num_bearings = bearings.map(|b| b.len()).unwrap_or(0);
+        
+        // Prepare radiuses
+        let radiuses_ptr = radiuses.map(|r| r.as_ptr()).unwrap_or(std::ptr::null());
+        let num_radiuses = radiuses.map(|r| r.len()).unwrap_or(0);
+        
+        // Prepare hints (convert Option<String> to C strings)
+        let hints_cstrings: Option<Vec<CString>> = hints.map(|h| {
+            h.iter().map(|opt_s| {
+                match opt_s {
+                    Some(s) => CString::new(s.as_str()).unwrap_or_else(|_| CString::new("").unwrap()),
+                    None => CString::new("").unwrap(),
+                }
+            }).collect()
+        });
+        let hints_ptrs: Option<Vec<*const c_char>> = hints_cstrings.as_ref().map(|cs| {
+            cs.iter().map(|c| c.as_ptr()).collect()
+        });
+        let hints_ptr = hints_ptrs.as_ref().map(|p| p.as_ptr()).unwrap_or(std::ptr::null());
+        let num_hints = hints.map(|h| h.len()).unwrap_or(0);
+        
+        // Prepare approaches (convert Option<String> to C strings)
+        let approaches_cstrings: Option<Vec<CString>> = approaches.map(|a| {
+            a.iter().map(|opt_s| {
+                match opt_s {
+                    Some(s) => CString::new(s.as_str()).unwrap_or_else(|_| CString::new("").unwrap()),
+                    None => CString::new("").unwrap(),
+                }
+            }).collect()
+        });
+        let approaches_ptrs: Option<Vec<*const c_char>> = approaches_cstrings.as_ref().map(|cs| {
+            cs.iter().map(|c| c.as_ptr()).collect()
+        });
+        let approaches_ptr = approaches_ptrs.as_ref().map(|p| p.as_ptr()).unwrap_or(std::ptr::null());
+        let num_approaches = approaches.map(|a| a.len()).unwrap_or(0);
+        
+        // Prepare snapping
+        let snapping_cstring = snapping.map(|s| CString::new(s).unwrap());
+        let snapping_ptr = snapping_cstring.as_ref().map(|c| c.as_ptr()).unwrap_or(std::ptr::null());
 
-        let coords : Vec<f64> = coordinates.iter().flat_map(|&(lon, lat)| vec![lon, lat]).collect();
         let result = unsafe {
-            osrm_trip(self.instance, coords.as_ptr(), coordinates.len() )
+            osrm_trip(
+                self.instance,
+                coords.as_ptr(),
+                coordinates.len(),
+                bearings_ptr,
+                num_bearings,
+                radiuses_ptr,
+                num_radiuses,
+                hints_ptr,
+                num_hints,
+                generate_hints,
+                approaches_ptr,
+                num_approaches,
+                snapping_ptr,
+            )
         };
 
         let message_ptr = result.message;
