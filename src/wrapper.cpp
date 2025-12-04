@@ -320,7 +320,18 @@ extern "C" {
                            bool generate_hints,
                            const char* const* approaches,
                            size_t num_approaches,
-                           const char* snapping)
+                           const char* snapping,
+                           bool steps,
+                           int alternatives,
+                           const char* const* annotations,
+                           size_t num_annotations,
+                           const char* geometries,
+                           const char* overview,
+                           bool continue_straight,
+                           const char* const* exclude,
+                           size_t num_exclude,
+                           const size_t* waypoints,
+                           size_t num_waypoints)
     {
         if (!osrm_instance) {
             const char* err = "OSRM instance not found";
@@ -411,6 +422,100 @@ extern "C" {
                 params.snapping = osrm::RouteParameters::SnappingType::Any;
             } else {
                 params.snapping = osrm::RouteParameters::SnappingType::Default;
+            }
+        }
+
+        // Set steps
+        params.steps = steps;
+
+        // Set alternatives
+        if (alternatives > 0) {
+            params.alternatives = true;
+            params.number_of_alternatives = alternatives;
+        } else {
+            params.alternatives = false;
+        }
+
+        // Set annotations
+        if (num_annotations > 0 && annotations != nullptr) {
+            params.annotations = true;
+            params.annotations_type = osrm::RouteParameters::AnnotationsType::None;
+            
+            for (size_t i = 0; i < num_annotations; ++i) {
+                if (annotations[i] != nullptr) {
+                    std::string annotation_str(annotations[i]);
+                    if (annotation_str == "true" || annotation_str == "all") {
+                        params.annotations_type = osrm::RouteParameters::AnnotationsType::All;
+                        break;
+                    } else if (annotation_str == "nodes") {
+                        params.annotations_type = static_cast<osrm::RouteParameters::AnnotationsType>(
+                            static_cast<int>(params.annotations_type) | static_cast<int>(osrm::RouteParameters::AnnotationsType::Nodes));
+                    } else if (annotation_str == "distance") {
+                        params.annotations_type = static_cast<osrm::RouteParameters::AnnotationsType>(
+                            static_cast<int>(params.annotations_type) | static_cast<int>(osrm::RouteParameters::AnnotationsType::Distance));
+                    } else if (annotation_str == "duration") {
+                        params.annotations_type = static_cast<osrm::RouteParameters::AnnotationsType>(
+                            static_cast<int>(params.annotations_type) | static_cast<int>(osrm::RouteParameters::AnnotationsType::Duration));
+                    } else if (annotation_str == "datasources") {
+                        params.annotations_type = static_cast<osrm::RouteParameters::AnnotationsType>(
+                            static_cast<int>(params.annotations_type) | static_cast<int>(osrm::RouteParameters::AnnotationsType::Datasources));
+                    } else if (annotation_str == "weight") {
+                        params.annotations_type = static_cast<osrm::RouteParameters::AnnotationsType>(
+                            static_cast<int>(params.annotations_type) | static_cast<int>(osrm::RouteParameters::AnnotationsType::Weight));
+                    } else if (annotation_str == "speed") {
+                        params.annotations_type = static_cast<osrm::RouteParameters::AnnotationsType>(
+                            static_cast<int>(params.annotations_type) | static_cast<int>(osrm::RouteParameters::AnnotationsType::Speed));
+                    }
+                }
+            }
+        } else {
+            params.annotations = false;
+        }
+
+        // Set geometries
+        if (geometries != nullptr) {
+            std::string geometries_str(geometries);
+            if (geometries_str == "polyline") {
+                params.geometries = osrm::RouteParameters::GeometriesType::Polyline;
+            } else if (geometries_str == "polyline6") {
+                params.geometries = osrm::RouteParameters::GeometriesType::Polyline6;
+            } else if (geometries_str == "geojson") {
+                params.geometries = osrm::RouteParameters::GeometriesType::GeoJSON;
+            } else {
+                params.geometries = osrm::RouteParameters::GeometriesType::Polyline;
+            }
+        }
+
+        // Set overview
+        if (overview != nullptr) {
+            std::string overview_str(overview);
+            if (overview_str == "simplified") {
+                params.overview = osrm::RouteParameters::OverviewType::Simplified;
+            } else if (overview_str == "full") {
+                params.overview = osrm::RouteParameters::OverviewType::Full;
+            } else if (overview_str == "false") {
+                params.overview = osrm::RouteParameters::OverviewType::False;
+            } else {
+                params.overview = osrm::RouteParameters::OverviewType::Simplified;
+            }
+        }
+
+        // Set continue_straight
+        params.continue_straight = continue_straight;
+
+        // Set exclude
+        if (num_exclude > 0 && exclude != nullptr) {
+            for (size_t i = 0; i < num_exclude; ++i) {
+                if (exclude[i] != nullptr) {
+                    params.exclude.push_back(std::string(exclude[i]));
+                }
+            }
+        }
+
+        // Set waypoints
+        if (num_waypoints > 0 && waypoints != nullptr) {
+            for (size_t i = 0; i < num_waypoints; ++i) {
+                params.waypoints.push_back(waypoints[i]);
             }
         }
 

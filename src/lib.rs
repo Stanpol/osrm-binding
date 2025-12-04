@@ -96,6 +96,17 @@ unsafe extern "C" {
         approaches: *const *const c_char,
         num_approaches: usize,
         snapping: *const c_char,
+        steps: bool,
+        alternatives: i32,
+        annotations: *const *const c_char,
+        num_annotations: usize,
+        geometries: *const c_char,
+        overview: *const c_char,
+        continue_straight: bool,
+        exclude: *const *const c_char,
+        num_exclude: usize,
+        waypoints: *const usize,
+        num_waypoints: usize,
     ) -> OsrmResult;
     
     fn osrm_match(
@@ -382,6 +393,14 @@ impl Osrm {
         generate_hints: bool,
         approaches: Option<&[Option<String>]>,
         snapping: Option<&str>,
+        steps: bool,
+        alternatives: Option<i32>,
+        annotations: Option<&[String]>,
+        geometries: Option<&str>,
+        overview: Option<&str>,
+        continue_straight: bool,
+        exclude: Option<&[String]>,
+        waypoints: Option<&[usize]>,
     ) -> Result<String, String> {
         let coords: Vec<f64> = coordinates.iter().flat_map(|&(lon, lat)| vec![lon, lat]).collect();
         
@@ -430,6 +449,38 @@ impl Osrm {
         let snapping_cstring = snapping.map(|s| CString::new(s).unwrap());
         let snapping_ptr = snapping_cstring.as_ref().map(|c| c.as_ptr()).unwrap_or(std::ptr::null());
 
+        // Prepare annotations (convert Vec<String> to C strings)
+        let annotations_cstrings: Option<Vec<CString>> = annotations.map(|a| {
+            a.iter().map(|s| CString::new(s.as_str()).unwrap_or_else(|_| CString::new("").unwrap())).collect()
+        });
+        let annotations_ptrs: Option<Vec<*const c_char>> = annotations_cstrings.as_ref().map(|cs| {
+            cs.iter().map(|c| c.as_ptr()).collect()
+        });
+        let annotations_ptr = annotations_ptrs.as_ref().map(|p| p.as_ptr()).unwrap_or(std::ptr::null());
+        let num_annotations = annotations.map(|a| a.len()).unwrap_or(0);
+
+        // Prepare geometries
+        let geometries_cstring = geometries.map(|s| CString::new(s).unwrap());
+        let geometries_ptr = geometries_cstring.as_ref().map(|c| c.as_ptr()).unwrap_or(std::ptr::null());
+
+        // Prepare overview
+        let overview_cstring = overview.map(|s| CString::new(s).unwrap());
+        let overview_ptr = overview_cstring.as_ref().map(|c| c.as_ptr()).unwrap_or(std::ptr::null());
+
+        // Prepare exclude (convert Vec<String> to C strings)
+        let exclude_cstrings: Option<Vec<CString>> = exclude.map(|e| {
+            e.iter().map(|s| CString::new(s.as_str()).unwrap_or_else(|_| CString::new("").unwrap())).collect()
+        });
+        let exclude_ptrs: Option<Vec<*const c_char>> = exclude_cstrings.as_ref().map(|cs| {
+            cs.iter().map(|c| c.as_ptr()).collect()
+        });
+        let exclude_ptr = exclude_ptrs.as_ref().map(|p| p.as_ptr()).unwrap_or(std::ptr::null());
+        let num_exclude = exclude.map(|e| e.len()).unwrap_or(0);
+
+        // Prepare waypoints
+        let waypoints_ptr = waypoints.map(|w| w.as_ptr()).unwrap_or(std::ptr::null());
+        let num_waypoints = waypoints.map(|w| w.len()).unwrap_or(0);
+
         let result = unsafe {
             osrm_route(
                 self.instance,
@@ -445,6 +496,17 @@ impl Osrm {
                 approaches_ptr,
                 num_approaches,
                 snapping_ptr,
+                steps,
+                alternatives.unwrap_or(0),
+                annotations_ptr,
+                num_annotations,
+                geometries_ptr,
+                overview_ptr,
+                continue_straight,
+                exclude_ptr,
+                num_exclude,
+                waypoints_ptr,
+                num_waypoints,
             )
         };
 

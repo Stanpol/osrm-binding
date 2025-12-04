@@ -20,6 +20,22 @@ pub struct RouteRequest {
     pub approaches: Option<Vec<Option<String>>>,
     #[builder(default)]
     pub snapping: Option<String>,
+    #[builder(default = "false")]
+    pub steps: bool,
+    #[builder(default)]
+    pub alternatives: Option<i32>,
+    #[builder(default)]
+    pub annotations: Option<Vec<String>>,
+    #[builder(default)]
+    pub geometries: Option<String>,
+    #[builder(default)]
+    pub overview: Option<String>,
+    #[builder(default = "false")]
+    pub continue_straight: bool,
+    #[builder(default)]
+    pub exclude: Option<Vec<String>>,
+    #[builder(default)]
+    pub waypoints: Option<Vec<usize>>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
