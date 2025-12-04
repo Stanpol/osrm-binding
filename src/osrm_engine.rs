@@ -74,8 +74,36 @@ impl OsrmEngine {
         if len == 0 {
             return Err(OsrmError::InvalidTableArgument);
         }
-        let coordinates: &[(f64, f64)] = &route_request.points.iter().map( |p|  (p.longitude, p.latitude) ).collect::<Vec<(f64, f64)>>()[..];
-        let result = self.instance.route(coordinates).map_err( |e| OsrmError::FfiError(e))?;
+        
+        let coordinates: Vec<(f64, f64)> = route_request.points.iter()
+            .map(|p| (p.longitude, p.latitude))
+            .collect();
+        
+        // Prepare bearings
+        let bearings_vec: Option<Vec<(f64, f64)>> = route_request.bearings.as_ref().map(|bearings| {
+            bearings.iter().map(|b| {
+                b.map(|(v, r)| (v as f64, r as f64)).unwrap_or((-1.0, -1.0))
+            }).collect()
+        });
+        
+        // Prepare radiuses
+        let radiuses_vec: Option<Vec<f64>> = route_request.radiuses.as_ref().map(|radiuses| {
+            radiuses.iter().map(|r| r.unwrap_or(-1.0)).collect()
+        });
+        
+        // Prepare approaches
+        let approaches_vec: Option<Vec<Option<String>>> = route_request.approaches.clone();
+        
+        let result = self.instance.route(
+            &coordinates,
+            bearings_vec.as_deref(),
+            radiuses_vec.as_deref(),
+            route_request.hints.as_deref(),
+            route_request.generate_hints,
+            approaches_vec.as_deref(),
+            route_request.snapping.as_deref(),
+        ).map_err(|e| OsrmError::FfiError(e))?;
+        
         serde_json::from_str::<RouteResponse>(&result).map_err(|e| OsrmError::JsonParse(e))
     }
 
@@ -90,8 +118,8 @@ impl OsrmEngine {
     }
 
     pub fn simple_route(&self, from : Point , to : Point) -> Result<SimpleRouteResponse, OsrmError> {
-        let coordinates: &[(f64, f64)] =  &[from, to].iter().map( |p |  (p.longitude, p.latitude)).collect::<Vec<(f64, f64)>>()[..];
-        let result = self.instance.route(coordinates).map_err( |e| OsrmError::FfiError(e))?;
+        let coordinates: Vec<(f64, f64)> = vec![(from.longitude, from.latitude), (to.longitude, to.latitude)];
+        let result = self.instance.route(&coordinates, None, None, None, true, None, None).map_err( |e| OsrmError::FfiError(e))?;
         let route_response = serde_json::from_str::<RouteResponse>(&result).map_err(|e| OsrmError::JsonParse(e))?;
         if route_response.routes.len() == 0 {
             return Err(OsrmError::ApiError("No route were returned between those 2 points".to_owned()))

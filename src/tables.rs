@@ -1,6 +1,5 @@
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
-pub(crate) use crate::point::Point;
 
 #[derive(Debug, Deserialize, Serialize)]
 #[allow(dead_code)]
