@@ -201,6 +201,11 @@ impl OsrmEngine {
             match_request.tidy,
             match_request.waypoints.as_deref(),
             match_request.snapping.as_deref(),
+            match_request.steps,
+            match_request.annotations.as_deref(),
+            match_request.geometries.as_deref(),
+            match_request.overview.as_deref(),
+            match_request.exclude.as_deref(),
         ).map_err(|e| OsrmError::FfiError(e))?;
         
         serde_json::from_str::<MatchResponse>(&result).map_err(|e| OsrmError::JsonParse(e))

@@ -2,6 +2,7 @@
 use crate::point::Point;
 use crate::waypoints::Waypoint;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 /// Request for map matching GPS traces to the road network
 #[derive(Debug, Clone)]
@@ -28,6 +29,16 @@ pub struct MatchRequest {
     pub waypoints: Option<Vec<usize>>,
     /// Snapping type: "default" or "any"
     pub snapping: Option<String>,
+    /// Return turn-by-turn instructions
+    pub steps: bool,
+    /// Annotations to include (duration, distance, nodes, datasources, weight, speed)
+    pub annotations: Option<Vec<String>>,
+    /// Geometry format: "polyline", "polyline6", or "geojson"
+    pub geometries: Option<String>,
+    /// Overview detail level: "simplified", "full", or "false"
+    pub overview: Option<String>,
+    /// Road types to exclude
+    pub exclude: Option<Vec<String>>,
 }
 
 /// A matched route segment with confidence score
@@ -38,7 +49,8 @@ pub struct Matching {
     /// Name of the weight profile
     pub weight_name: String,
     /// Geometry of the matched route
-    pub geometry: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub geometry: Option<Value>,  // Can be String (polyline) or Object (GeoJSON), None when overview=false
     /// Total weight of the matched route
     pub weight: f64,
     /// Total duration in seconds

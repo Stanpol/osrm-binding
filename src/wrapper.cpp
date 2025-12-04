@@ -692,7 +692,14 @@ extern "C" {
                            bool tidy,
                            const size_t* waypoints,
                            size_t num_waypoints,
-                           const char* snapping)
+                           const char* snapping,
+                           bool steps,
+                           const char* const* annotations,
+                           size_t num_annotations,
+                           const char* geometries,
+                           const char* overview,
+                           const char* const* exclude,
+                           size_t num_exclude)
     {
         if (!osrm_instance) {
             const char* err = "OSRM instance not found";
@@ -815,6 +822,82 @@ extern "C" {
                 params.snapping = osrm::MatchParameters::SnappingType::Any;
             } else {
                 params.snapping = osrm::MatchParameters::SnappingType::Default;
+            }
+        }
+
+        // Set steps
+        params.steps = steps;
+
+        // Set annotations
+        if (num_annotations > 0 && annotations != nullptr) {
+            params.annotations = true;
+            params.annotations_type = osrm::MatchParameters::AnnotationsType::None;
+            
+            for (size_t i = 0; i < num_annotations; ++i) {
+                if (annotations[i] != nullptr) {
+                    std::string annotation_str(annotations[i]);
+                    if (annotation_str == "true" || annotation_str == "all") {
+                        params.annotations_type = osrm::MatchParameters::AnnotationsType::All;
+                        break;
+                    } else if (annotation_str == "nodes") {
+                        params.annotations_type = static_cast<osrm::MatchParameters::AnnotationsType>(
+                            static_cast<int>(params.annotations_type) | static_cast<int>(osrm::MatchParameters::AnnotationsType::Nodes));
+                    } else if (annotation_str == "distance") {
+                        params.annotations_type = static_cast<osrm::MatchParameters::AnnotationsType>(
+                            static_cast<int>(params.annotations_type) | static_cast<int>(osrm::MatchParameters::AnnotationsType::Distance));
+                    } else if (annotation_str == "duration") {
+                        params.annotations_type = static_cast<osrm::MatchParameters::AnnotationsType>(
+                            static_cast<int>(params.annotations_type) | static_cast<int>(osrm::MatchParameters::AnnotationsType::Duration));
+                    } else if (annotation_str == "datasources") {
+                        params.annotations_type = static_cast<osrm::MatchParameters::AnnotationsType>(
+                            static_cast<int>(params.annotations_type) | static_cast<int>(osrm::MatchParameters::AnnotationsType::Datasources));
+                    } else if (annotation_str == "weight") {
+                        params.annotations_type = static_cast<osrm::MatchParameters::AnnotationsType>(
+                            static_cast<int>(params.annotations_type) | static_cast<int>(osrm::MatchParameters::AnnotationsType::Weight));
+                    } else if (annotation_str == "speed") {
+                        params.annotations_type = static_cast<osrm::MatchParameters::AnnotationsType>(
+                            static_cast<int>(params.annotations_type) | static_cast<int>(osrm::MatchParameters::AnnotationsType::Speed));
+                    }
+                }
+            }
+        } else {
+            params.annotations = false;
+        }
+
+        // Set geometries
+        if (geometries != nullptr) {
+            std::string geometries_str(geometries);
+            if (geometries_str == "polyline") {
+                params.geometries = osrm::MatchParameters::GeometriesType::Polyline;
+            } else if (geometries_str == "polyline6") {
+                params.geometries = osrm::MatchParameters::GeometriesType::Polyline6;
+            } else if (geometries_str == "geojson") {
+                params.geometries = osrm::MatchParameters::GeometriesType::GeoJSON;
+            } else {
+                params.geometries = osrm::MatchParameters::GeometriesType::Polyline;
+            }
+        }
+
+        // Set overview
+        if (overview != nullptr) {
+            std::string overview_str(overview);
+            if (overview_str == "simplified") {
+                params.overview = osrm::MatchParameters::OverviewType::Simplified;
+            } else if (overview_str == "full") {
+                params.overview = osrm::MatchParameters::OverviewType::Full;
+            } else if (overview_str == "false") {
+                params.overview = osrm::MatchParameters::OverviewType::False;
+            } else {
+                params.overview = osrm::MatchParameters::OverviewType::Simplified;
+            }
+        }
+
+        // Set exclude
+        if (num_exclude > 0 && exclude != nullptr) {
+            for (size_t i = 0; i < num_exclude; ++i) {
+                if (exclude[i] != nullptr) {
+                    params.exclude.push_back(std::string(exclude[i]));
+                }
             }
         }
 
