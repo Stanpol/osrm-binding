@@ -80,6 +80,16 @@ unsafe extern "C" {
         approaches: *const *const c_char,
         num_approaches: usize,
         snapping: *const c_char,
+        roundtrip: bool,
+        source: *const c_char,
+        destination: *const c_char,
+        steps: bool,
+        annotations: *const *const c_char,
+        num_annotations: usize,
+        geometries: *const c_char,
+        overview: *const c_char,
+        exclude: *const *const c_char,
+        num_exclude: usize,
     ) -> OsrmResult;
 
     fn osrm_route(
@@ -306,6 +316,14 @@ impl Osrm {
         generate_hints: bool,
         approaches: Option<&[Option<String>]>,
         snapping: Option<&str>,
+        roundtrip: bool,
+        source: Option<&str>,
+        destination: Option<&str>,
+        steps: bool,
+        annotations: Option<&[String]>,
+        geometries: Option<&str>,
+        overview: Option<&str>,
+        exclude: Option<&[String]>,
     ) -> Result<String, String> {
         let coords: Vec<f64> = coordinates.iter().flat_map(|&(lon, lat)| vec![lon, lat]).collect();
         
@@ -354,6 +372,42 @@ impl Osrm {
         let snapping_cstring = snapping.map(|s| CString::new(s).unwrap());
         let snapping_ptr = snapping_cstring.as_ref().map(|c| c.as_ptr()).unwrap_or(std::ptr::null());
 
+        // Prepare source
+        let source_cstring = source.map(|s| CString::new(s).unwrap());
+        let source_ptr = source_cstring.as_ref().map(|c| c.as_ptr()).unwrap_or(std::ptr::null());
+
+        // Prepare destination
+        let destination_cstring = destination.map(|s| CString::new(s).unwrap());
+        let destination_ptr = destination_cstring.as_ref().map(|c| c.as_ptr()).unwrap_or(std::ptr::null());
+
+        // Prepare annotations
+        let annotations_cstrings: Option<Vec<CString>> = annotations.map(|a| {
+            a.iter().map(|s| CString::new(s.as_str()).unwrap()).collect()
+        });
+        let annotations_ptrs: Option<Vec<*const c_char>> = annotations_cstrings.as_ref().map(|cs| {
+            cs.iter().map(|c| c.as_ptr()).collect()
+        });
+        let annotations_ptr = annotations_ptrs.as_ref().map(|p| p.as_ptr()).unwrap_or(std::ptr::null());
+        let num_annotations = annotations.map(|a| a.len()).unwrap_or(0);
+
+        // Prepare geometries
+        let geometries_cstring = geometries.map(|s| CString::new(s).unwrap());
+        let geometries_ptr = geometries_cstring.as_ref().map(|c| c.as_ptr()).unwrap_or(std::ptr::null());
+
+        // Prepare overview
+        let overview_cstring = overview.map(|s| CString::new(s).unwrap());
+        let overview_ptr = overview_cstring.as_ref().map(|c| c.as_ptr()).unwrap_or(std::ptr::null());
+
+        // Prepare exclude
+        let exclude_cstrings: Option<Vec<CString>> = exclude.map(|e| {
+            e.iter().map(|s| CString::new(s.as_str()).unwrap()).collect()
+        });
+        let exclude_ptrs: Option<Vec<*const c_char>> = exclude_cstrings.as_ref().map(|cs| {
+            cs.iter().map(|c| c.as_ptr()).collect()
+        });
+        let exclude_ptr = exclude_ptrs.as_ref().map(|p| p.as_ptr()).unwrap_or(std::ptr::null());
+        let num_exclude = exclude.map(|e| e.len()).unwrap_or(0);
+
         let result = unsafe {
             osrm_trip(
                 self.instance,
@@ -369,6 +423,16 @@ impl Osrm {
                 approaches_ptr,
                 num_approaches,
                 snapping_ptr,
+                roundtrip,
+                source_ptr,
+                destination_ptr,
+                steps,
+                annotations_ptr,
+                num_annotations,
+                geometries_ptr,
+                overview_ptr,
+                exclude_ptr,
+                num_exclude,
             )
         };
 

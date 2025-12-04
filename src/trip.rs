@@ -21,6 +21,22 @@ pub struct TripRequest {
     pub approaches: Option<Vec<Option<String>>>,
     #[builder(default)]
     pub snapping: Option<String>,
+    #[builder(default = "true")]
+    pub roundtrip: bool,
+    #[builder(default)]
+    pub source: Option<String>,
+    #[builder(default)]
+    pub destination: Option<String>,
+    #[builder(default = "false")]
+    pub steps: bool,
+    #[builder(default)]
+    pub annotations: Option<Vec<String>>,
+    #[builder(default)]
+    pub geometries: Option<String>,
+    #[builder(default)]
+    pub overview: Option<String>,
+    #[builder(default)]
+    pub exclude: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

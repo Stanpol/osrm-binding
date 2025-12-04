@@ -148,6 +148,14 @@ impl OsrmEngine {
             trip_request.generate_hints,
             approaches_vec.as_deref(),
             trip_request.snapping.as_deref(),
+            trip_request.roundtrip,
+            trip_request.source.as_deref(),
+            trip_request.destination.as_deref(),
+            trip_request.steps,
+            trip_request.annotations.as_deref(),
+            trip_request.geometries.as_deref(),
+            trip_request.overview.as_deref(),
+            trip_request.exclude.as_deref(),
         ).map_err(|e| OsrmError::FfiError(e))?;
         
         serde_json::from_str::<TripResponse>(&result).map_err(|e| OsrmError::JsonParse(e))

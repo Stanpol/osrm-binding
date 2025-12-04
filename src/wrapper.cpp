@@ -555,7 +555,17 @@ extern "C" {
                           bool generate_hints,
                           const char* const* approaches,
                           size_t num_approaches,
-                          const char* snapping)
+                          const char* snapping,
+                          bool roundtrip,
+                          const char* source,
+                          const char* destination,
+                          bool steps,
+                          const char* const* annotations,
+                          size_t num_annotations,
+                          const char* geometries,
+                          const char* overview,
+                          const char* const* exclude,
+                          size_t num_exclude)
     {
 
             if (!osrm_instance) {
@@ -647,6 +657,87 @@ extern "C" {
                     params.snapping = osrm::TripParameters::SnappingType::Any;
                 } else {
                     params.snapping = osrm::TripParameters::SnappingType::Default;
+                }
+            }
+
+            // Set roundtrip
+            params.roundtrip = roundtrip;
+
+            // Set source
+            if (source != nullptr) {
+                std::string source_str(source);
+                if (source_str == "any") {
+                    params.source = osrm::TripParameters::SourceType::Any;
+                } else if (source_str == "first") {
+                    params.source = osrm::TripParameters::SourceType::First;
+                }
+            }
+
+            // Set destination
+            if (destination != nullptr) {
+                std::string destination_str(destination);
+                if (destination_str == "any") {
+                    params.destination = osrm::TripParameters::DestinationType::Any;
+                } else if (destination_str == "last") {
+                    params.destination = osrm::TripParameters::DestinationType::Last;
+                }
+            }
+
+            // Set steps
+            params.steps = steps;
+
+            // Set annotations
+            if (num_annotations > 0 && annotations != nullptr) {
+                for (size_t i = 0; i < num_annotations; ++i) {
+                    if (annotations[i] != nullptr) {
+                        std::string annotation(annotations[i]);
+                        if (annotation == "duration") {
+                            params.annotations |= osrm::RouteParameters::AnnotationsType::Duration;
+                        } else if (annotation == "distance") {
+                            params.annotations |= osrm::RouteParameters::AnnotationsType::Distance;
+                        } else if (annotation == "speed") {
+                            params.annotations |= osrm::RouteParameters::AnnotationsType::Speed;
+                        } else if (annotation == "weight") {
+                            params.annotations |= osrm::RouteParameters::AnnotationsType::Weight;
+                        } else if (annotation == "datasources") {
+                            params.annotations |= osrm::RouteParameters::AnnotationsType::Datasources;
+                        } else if (annotation == "nodes") {
+                            params.annotations |= osrm::RouteParameters::AnnotationsType::Nodes;
+                        }
+                    }
+                }
+            }
+
+            // Set geometries
+            if (geometries != nullptr) {
+                std::string geom_str(geometries);
+                if (geom_str == "polyline") {
+                    params.geometries = osrm::RouteParameters::GeometriesType::Polyline;
+                } else if (geom_str == "polyline6") {
+                    params.geometries = osrm::RouteParameters::GeometriesType::Polyline6;
+                } else if (geom_str == "geojson") {
+                    params.geometries = osrm::RouteParameters::GeometriesType::GeoJSON;
+                }
+            }
+
+            // Set overview
+            if (overview != nullptr) {
+                std::string overview_str(overview);
+                if (overview_str == "simplified") {
+                    params.overview = osrm::RouteParameters::OverviewType::Simplified;
+                } else if (overview_str == "full") {
+                    params.overview = osrm::RouteParameters::OverviewType::Full;
+                } else if (overview_str == "false") {
+                    params.overview = osrm::RouteParameters::OverviewType::False;
+                }
+            }
+
+            // Set exclude
+            if (num_exclude > 0 && exclude != nullptr) {
+                for (size_t i = 0; i < num_exclude; ++i) {
+                    if (exclude[i] != nullptr) {
+                        params.exclude.push_back(std::string(exclude[i]));
+                    }
                 }
             }
 
