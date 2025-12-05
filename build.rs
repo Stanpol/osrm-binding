@@ -1,10 +1,11 @@
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 
-
 fn main() {
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
 
+    // 1. Download and Unpack
     let osrm_url = "https://github.com/Project-OSRM/osrm-backend/archive/refs/tags/v6.0.0.tar.gz";
 
     eprintln!("Downloading OSRM source from {}...", osrm_url);
@@ -22,71 +23,114 @@ fn main() {
     let osrm_source_path = find_osrm_source(&out_dir);
     eprintln!("OSRM source path: {}", osrm_source_path.display());
 
-    let tbb_include = "/opt/homebrew/opt/tbb/include";
-    let cxx_flags = "-Wno-array-bounds -Wno-uninitialized -Wno-stringop-overflow -Wno-suggest-destructor-override";
-
-    // Add flags that will override OSRM's strict warnings
-    let additional_cxx_flags = format!("-I{} -Wno-suggest-destructor-override -Wno-error=suggest-destructor-override", tbb_include);
-
-    // Configure CMake with explicit TBB paths
-    let dst = cmake::Config::new(&osrm_source_path)
-        .env("CXXFLAGS", cxx_flags)
-        .env("Boost_ROOT", "/opt/homebrew/opt/boost@1.85")
-        .env("TBB_ROOT", "/opt/homebrew/opt/tbb")
-        .define("CMAKE_PREFIX_PATH", "/opt/homebrew/opt/boost@1.85;/opt/homebrew/opt/tbb")
-        .define("TBB_DIR", "/opt/homebrew/opt/tbb/lib/cmake/TBB")
-        .define("TBB_ROOT", "/opt/homebrew/opt/tbb")
-        .cflag(format!("-I{}", tbb_include))
-        .cxxflag(&additional_cxx_flags)
+    // 2. Prepare Configuration based on OS
+    let mut cxx_flags = String::from("-Wno-array-bounds -Wno-uninitialized -Wno-stringop-overflow -std=c++20 -Wno-error");
+    
+    // Initialize CMake config with common settings
+    let mut cmake_config = cmake::Config::new(&osrm_source_path);
+    cmake_config
         .define("CMAKE_CXX_STANDARD", "20")
         .define("CMAKE_CXX_STANDARD_REQUIRED", "ON")
-        .define("CMAKE_CXX_FLAGS_RELEASE", &format!("-DNDEBUG {}", additional_cxx_flags))
         .define("ENABLE_ASSERTIONS", "Off")
         .define("ENABLE_LTO", "Off")
-        .define("ENABLE_MASON", "Off") // Ensure it doesn't try to download dependencies
-        .build();
+        .define("ENABLE_MASON", "Off"); // Don't download dependencies
 
-    cc::Build::new()
+    // OS Specific CMake Configuration
+    if target_os == "macos" {
+        // macOS / Homebrew Configuration
+        let tbb_root = "/opt/homebrew/opt/tbb";
+        let boost_root = "/opt/homebrew/opt/boost@1.85";
+        let tbb_include = format!("{}/include", tbb_root);
+
+        // Additional Mac Flags
+        cxx_flags.push_str(" -Wno-suggest-destructor-override -Wno-error=suggest-destructor-override");
+        let additional_cxx_flags = format!("-I{} -Wno-suggest-destructor-override -Wno-error=suggest-destructor-override", tbb_include);
+
+        cmake_config
+            .env("Boost_ROOT", boost_root)
+            .env("TBB_ROOT", tbb_root)
+            .define("CMAKE_PREFIX_PATH", format!("{};{}", boost_root, tbb_root))
+            .define("TBB_DIR", format!("{}/lib/cmake/TBB", tbb_root))
+            // Re-define TBB_ROOT for good measure as seen in your mac build
+            .define("TBB_ROOT", tbb_root) 
+            .cflag(format!("-I{}", tbb_include))
+            .cxxflag(&additional_cxx_flags)
+            .define("CMAKE_CXX_FLAGS_RELEASE", format!("-DNDEBUG {}", additional_cxx_flags));
+            
+    } else {
+        // Linux Configuration (Default /usr/local)
+        cmake_config
+            .define("TBB_ROOT", "/usr/local")
+            .define("TBB_INCLUDE_DIR", "/usr/local/include")
+            // Linux often needs the explicit .so path defined for OSRM cmake
+            .define("TBB_LIBRARY", "/usr/local/lib/libtbb.so")
+            .define("CMAKE_CXX_FLAGS_RELEASE", "-DNDEBUG");
+    }
+
+    // Apply combined CXX flags
+    cmake_config.env("CXXFLAGS", &cxx_flags);
+    
+    // 3. Build with CMake
+    let dst = cmake_config.build();
+
+    // 4. Compile the Rust/C++ Wrapper
+    let mut build = cc::Build::new();
+    build
         .cpp(true)
         .file("src/wrapper.cpp")
         .flag("-std=c++20")
         .include(dst.join("include"))
         .include(osrm_source_path.join("include"))
         .include(osrm_source_path.join("third_party/fmt/include"))
-        .include("/opt/homebrew/opt/boost@1.85/include")
-        .include("/opt/homebrew/opt/tbb/include")
-        .define("FMT_HEADER_ONLY", None)
-        .compile("osrm_wrapper");
+        .define("FMT_HEADER_ONLY", None);
 
+    if target_os == "macos" {
+        build
+            .include("/opt/homebrew/opt/boost@1.85/include")
+            .include("/opt/homebrew/opt/tbb/include");
+    }
+
+    build.compile("osrm_wrapper");
+
+    // 5. Linking Configuration
     let lib_path = dst.join("lib");
     println!("cargo:rustc-link-search=native={}", lib_path.display());
-    
-    // Add Homebrew library paths for Boost, TBB, and other dependencies
-    println!("cargo:rustc-link-search=native=/opt/homebrew/opt/boost@1.85/lib");
-    println!("cargo:rustc-link-search=native=/opt/homebrew/opt/tbb/lib");
-    println!("cargo:rustc-link-search=native=/opt/homebrew/lib");
 
-    println!("cargo:rustc-link-lib=static=osrm_wrapper");
-    println!("cargo:rustc-link-lib=static=osrm");
-    println!("cargo:rustc-link-lib=static=osrm_store");
-    println!("cargo:rustc-link-lib=static=osrm_extract");
-    println!("cargo:rustc-link-lib=static=osrm_partition");
-    println!("cargo:rustc-link-lib=static=osrm_update");
-    println!("cargo:rustc-link-lib=static=osrm_guidance");
-    println!("cargo:rustc-link-lib=static=osrm_customize");
-    println!("cargo:rustc-link-lib=static=osrm_contract");
+    if target_os == "macos" {
+        // Mac-specific search paths
+        println!("cargo:rustc-link-search=native=/opt/homebrew/opt/boost@1.85/lib");
+        println!("cargo:rustc-link-search=native=/opt/homebrew/opt/tbb/lib");
+        println!("cargo:rustc-link-search=native=/opt/homebrew/lib");
+    }
 
+    // Static OSRM Libs
+    let osrm_libs = [
+        "osrm_wrapper", "osrm", "osrm_store", "osrm_extract",
+        "osrm_partition", "osrm_update", "osrm_guidance",
+        "osrm_customize", "osrm_contract"
+    ];
+    for lib in osrm_libs {
+        println!("cargo:rustc-link-lib=static={}", lib);
+    }
+
+    // Dynamic Libs
     println!("cargo:rustc-link-lib=dylib=boost_thread");
     println!("cargo:rustc-link-lib=dylib=boost_filesystem");
     println!("cargo:rustc-link-lib=dylib=boost_iostreams");
     println!("cargo:rustc-link-lib=dylib=tbb");
     println!("cargo:rustc-link-lib=dylib=fmt");
-    println!("cargo:rustc-link-lib=dylib=c++");
 
+    // Platform specific C++ std lib
+    if target_os == "macos" {
+        println!("cargo:rustc-link-lib=dylib=c++");
+    } else {
+        println!("cargo:rustc-link-lib=dylib=stdc++");
+    }
+
+    // Common system libs
     println!("cargo:rustc-link-lib=dylib=z");
     println!("cargo:rustc-link-lib=dylib=bz2");
     println!("cargo:rustc-link-lib=dylib=expat");
-
 }
 
 fn find_osrm_source(path: &Path) -> PathBuf {
