@@ -28,6 +28,7 @@ fn main() {
     // Add flags that will override OSRM's strict warnings
     let additional_cxx_flags = format!("-I{} -Wno-suggest-destructor-override -Wno-error=suggest-destructor-override", tbb_include);
 
+    // Configure CMake with explicit TBB paths
     let dst = cmake::Config::new(&osrm_source_path)
         .env("CXXFLAGS", cxx_flags)
         .env("Boost_ROOT", "/opt/homebrew/opt/boost@1.85")
@@ -42,6 +43,7 @@ fn main() {
         .define("CMAKE_CXX_FLAGS_RELEASE", &format!("-DNDEBUG {}", additional_cxx_flags))
         .define("ENABLE_ASSERTIONS", "Off")
         .define("ENABLE_LTO", "Off")
+        .define("ENABLE_MASON", "Off") // Ensure it doesn't try to download dependencies
         .build();
 
     cc::Build::new()
