@@ -167,6 +167,38 @@ unsafe extern "C" {
     ) -> OsrmResult;
     
     fn osrm_free_string(s: *mut c_char);
+    
+    fn osrm_run_contract(
+        base_path: *const c_char,
+        threads: i32
+    ) -> OsrmResult;
+    
+    fn osrm_run_extract(
+        input_path: *const c_char,
+        profile_path: *const c_char,
+        threads: i32,
+        generate_edge_based_graph: bool,
+        generate_node_based_graph: bool,
+        parse_conditionals: bool,
+        use_metadata: bool,
+        use_locations_cache: bool,
+    ) -> OsrmResult;
+    
+    fn osrm_run_partition(
+        base_path: *const c_char,
+        threads: i32,
+        balance: f64,
+        boundary_factor: f64,
+        num_optimizing_cuts: i32,
+        small_component_size: i32,
+        max_cell_sizes: *const i32,
+        num_max_cell_sizes: usize,
+    ) -> OsrmResult;
+    
+    fn osrm_run_customize(
+        base_path: *const c_char,
+        threads: i32
+    ) -> OsrmResult;
 }
 
 /// Configuration options for creating an OSRM engine instance
@@ -934,6 +966,161 @@ impl Osrm {
 
         if result.code != 0 {
             return Err(format!("OSRM error: {}", rust_str));
+        }
+
+        Ok(rust_str)
+    }
+
+    pub fn contract(base_path: &str, threads: Option<i32>) -> Result<String, String> {
+        let c_path = CString::new(base_path).map_err(|e| e.to_string())?;
+        let num_threads = threads.unwrap_or(0); // 0 lets OSRM decide
+
+        let result = unsafe {
+            osrm_run_contract(c_path.as_ptr(), num_threads)
+        };
+
+        let message_ptr = result.message;
+        if message_ptr.is_null() {
+            return Err("OSRM returned a null message".to_string());
+        }
+
+        let c_str = unsafe { CStr::from_ptr(message_ptr) };
+        let rust_str = c_str.to_str().map_err(|e| e.to_string())?.to_owned();
+
+        unsafe {
+            osrm_free_string(message_ptr);
+        }
+
+        if result.code != 0 {
+            return Err(format!("OSRM contraction error: {}", rust_str));
+        }
+
+        Ok(rust_str)
+    }
+
+    pub fn extract(
+        input_path: &str,
+        profile_path: &str,
+        threads: Option<i32>,
+        generate_edge_based_graph: bool,
+        generate_node_based_graph: bool,
+        parse_conditionals: bool,
+        use_metadata: bool,
+        use_locations_cache: bool,
+    ) -> Result<String, String> {
+        let c_input = CString::new(input_path).map_err(|e| e.to_string())?;
+        let c_profile = CString::new(profile_path).map_err(|e| e.to_string())?;
+        let num_threads = threads.unwrap_or(0);
+
+        let result = unsafe {
+            osrm_run_extract(
+                c_input.as_ptr(),
+                c_profile.as_ptr(),
+                num_threads,
+                generate_edge_based_graph,
+                generate_node_based_graph,
+                parse_conditionals,
+                use_metadata,
+                use_locations_cache,
+            )
+        };
+
+        let message_ptr = result.message;
+        if message_ptr.is_null() {
+            return Err("OSRM returned a null message".to_string());
+        }
+
+        let c_str = unsafe { CStr::from_ptr(message_ptr) };
+        let rust_str = c_str.to_str().map_err(|e| e.to_string())?.to_owned();
+
+        unsafe {
+            osrm_free_string(message_ptr);
+        }
+
+        if result.code != 0 {
+            return Err(format!("OSRM extraction error: {}", rust_str));
+        }
+
+        Ok(rust_str)
+    }
+
+    pub fn partition(
+        base_path: &str,
+        threads: Option<i32>,
+        balance: Option<f64>,
+        boundary_factor: Option<f64>,
+        num_optimizing_cuts: Option<i32>,
+        small_component_size: Option<i32>,
+        max_cell_sizes: Option<Vec<i32>>
+    ) -> Result<String, String> {
+        let c_path = CString::new(base_path).map_err(|e| e.to_string())?;
+        
+        let threads_val = threads.unwrap_or(0);
+        let balance_val = balance.unwrap_or(-1.0);
+        let boundary_factor_val = boundary_factor.unwrap_or(-1.0);
+        let cuts_val = num_optimizing_cuts.unwrap_or(0);
+        let small_comp_val = small_component_size.unwrap_or(0);
+        
+        let (cell_sizes_ptr, cell_sizes_len) = if let Some(ref sizes) = max_cell_sizes {
+            (sizes.as_ptr(), sizes.len())
+        } else {
+            (std::ptr::null(), 0)
+        };
+
+        let result = unsafe {
+            osrm_run_partition(
+                c_path.as_ptr(),
+                threads_val,
+                balance_val,
+                boundary_factor_val,
+                cuts_val,
+                small_comp_val,
+                cell_sizes_ptr,
+                cell_sizes_len
+            )
+        };
+
+        let message_ptr = result.message;
+        if message_ptr.is_null() {
+            return Err("OSRM returned a null message".to_string());
+        }
+
+        let c_str = unsafe { CStr::from_ptr(message_ptr) };
+        let rust_str = c_str.to_str().map_err(|e| e.to_string())?.to_owned();
+
+        unsafe {
+            osrm_free_string(message_ptr);
+        }
+
+        if result.code != 0 {
+            return Err(format!("OSRM partitioning error: {}", rust_str));
+        }
+
+        Ok(rust_str)
+    }
+
+    pub fn customize(base_path: &str, threads: Option<i32>) -> Result<String, String> {
+        let c_path = CString::new(base_path).map_err(|e| e.to_string())?;
+        let num_threads = threads.unwrap_or(0);
+
+        let result = unsafe {
+            osrm_run_customize(c_path.as_ptr(), num_threads)
+        };
+
+        let message_ptr = result.message;
+        if message_ptr.is_null() {
+            return Err("OSRM returned a null message".to_string());
+        }
+
+        let c_str = unsafe { CStr::from_ptr(message_ptr) };
+        let rust_str = c_str.to_str().map_err(|e| e.to_string())?.to_owned();
+
+        unsafe {
+            osrm_free_string(message_ptr);
+        }
+
+        if result.code != 0 {
+            return Err(format!("OSRM customization error: {}", rust_str));
         }
 
         Ok(rust_str)

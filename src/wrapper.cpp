@@ -8,11 +8,23 @@
 #include <osrm/trip_parameters.hpp>
 #include <osrm/match_parameters.hpp>
 #include <osrm/nearest_parameters.hpp>
+#include <contractor/contractor.hpp>
+#include <contractor/contractor_config.hpp>
+#include <customizer/customizer.hpp>
+#include <customizer/customizer_config.hpp>
+#include <partitioner/partitioner.hpp>
+#include <partitioner/partitioner_config.hpp>
+#include <storage/io_config.hpp>
+#include <extractor/extractor.hpp>
+#include <extractor/extractor_config.hpp>
+#include <extractor/scripting_environment_lua.hpp>
 
 #include <string>
 #include <iostream>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <thread>
 
 extern "C" {
 
@@ -1170,6 +1182,230 @@ extern "C" {
         strcpy(message, result_str.c_str());
 
         return {code, message};
+    }
+
+    OSRM_Result osrm_run_contract(const char* base_path, int threads) {
+        if (!base_path) {
+            const char* err = "Path cannot be null";
+            char* msg = new char[strlen(err) + 1];
+            strcpy(msg, err);
+            return {1, msg};
+        }
+
+        try {
+            osrm::contractor::ContractorConfig config;
+            config.base_path = std::filesystem::path(base_path);
+            config.UseDefaultOutputNames(config.base_path);
+            
+            // Set thread count: use provided value if > 0, otherwise use hardware concurrency
+            if (threads > 0) {
+                config.requested_num_threads = threads;
+            } else {
+                config.requested_num_threads = std::thread::hardware_concurrency();
+            }
+
+            osrm::contractor::Contractor contractor(config);
+            int ret = contractor.Run();
+
+            if (ret != 0) {
+                const char* err = "Contractor run returned non-zero code";
+                char* msg = new char[strlen(err) + 1];
+                strcpy(msg, err);
+                return {ret, msg};
+            }
+
+            // Success
+            const char* success = "Contraction successful";
+            char* msg = new char[strlen(success) + 1];
+            strcpy(msg, success);
+            return {0, msg};
+
+        } catch (const std::exception& e) {
+            std::string what = e.what();
+            char* msg = new char[what.length() + 1];
+            strcpy(msg, what.c_str());
+            return {1, msg};
+        }
+    }
+
+    OSRM_Result osrm_run_extract(
+        const char* input_path,
+        const char* profile_path,
+        int threads,
+        bool generate_edge_based_graph,
+        bool generate_node_based_graph,
+        bool parse_conditionals,
+        bool use_metadata,
+        bool use_locations_cache
+    ) {
+        if (!input_path) {
+            const char* err = "Input path cannot be null";
+            char* msg = new char[strlen(err) + 1];
+            strcpy(msg, err);
+            return {1, msg};
+        }
+        if (!profile_path) {
+            const char* err = "Profile path cannot be null";
+            char* msg = new char[strlen(err) + 1];
+            strcpy(msg, err);
+            return {1, msg};
+        }
+
+        try {
+            osrm::extractor::ExtractorConfig config;
+            config.input_path = std::filesystem::path(input_path);
+            config.profile_path = std::filesystem::path(profile_path);
+            
+            // Set thread count: use provided value if > 0, otherwise use hardware concurrency
+            if (threads > 0) {
+                config.requested_num_threads = threads;
+            } else {
+                config.requested_num_threads = std::thread::hardware_concurrency();
+            }
+            
+            config.use_metadata = use_metadata;
+            config.use_locations_cache = use_locations_cache;
+            config.parse_conditionals = parse_conditionals;
+            
+            // Note: OSRM's extractor writes multiple files (.osrm, .osrm.names, etc.)
+            // The logic inside Extractor::run handles these based on input_path.
+
+            osrm::extractor::Extractor extractor(config);
+            // Extractor needs a ScriptingEnvironment
+            osrm::extractor::Sol2ScriptingEnvironment scripting_environment(
+                config.profile_path.string(), 
+                config.location_dependent_data_paths
+            );
+
+            int ret = extractor.run(scripting_environment);
+
+            if (ret != 0) {
+                const char* err = "Extraction run returned non-zero code";
+                char* msg = new char[strlen(err) + 1];
+                strcpy(msg, err);
+                return {ret, msg};
+            }
+
+            const char* success = "Extraction successful";
+            char* msg = new char[strlen(success) + 1];
+            strcpy(msg, success);
+            return {0, msg};
+
+        } catch (const std::exception& e) {
+            std::string what = e.what();
+            char* msg = new char[what.length() + 1];
+            strcpy(msg, what.c_str());
+            return {1, msg};
+        }
+    }
+
+    OSRM_Result osrm_run_partition(
+        const char* base_path, 
+        int threads,
+        double balance,
+        double boundary_factor,
+        int num_optimizing_cuts,
+        int small_component_size,
+        const int* max_cell_sizes,
+        size_t num_max_cell_sizes
+    ) {
+        if (!base_path) {
+            const char* err = "Path cannot be null";
+            char* msg = new char[strlen(err) + 1];
+            strcpy(msg, err);
+            return {1, msg};
+        }
+
+        try {
+            osrm::partitioner::PartitionerConfig config;
+            config.base_path = std::filesystem::path(base_path);
+            config.UseDefaultOutputNames(config.base_path);
+            
+            // Set thread count: use provided value if > 0, otherwise use hardware concurrency
+            if (threads > 0) {
+                config.requested_num_threads = threads;
+            } else {
+                config.requested_num_threads = std::thread::hardware_concurrency();
+            }
+            
+            // Apply overrides if values are valid
+            if (balance > 0) config.balance = balance;
+            if (boundary_factor > 0) config.boundary_factor = boundary_factor;
+            if (num_optimizing_cuts > 0) config.num_optimizing_cuts = num_optimizing_cuts;
+            if (small_component_size > 0) config.small_component_size = small_component_size;
+            
+            // If cell sizes are provided, override the defaults
+            if (max_cell_sizes != nullptr && num_max_cell_sizes > 0) {
+                config.max_cell_sizes.clear();
+                for (size_t i = 0; i < num_max_cell_sizes; ++i) {
+                    config.max_cell_sizes.push_back(static_cast<std::size_t>(max_cell_sizes[i]));
+                }
+            }
+
+            osrm::partitioner::Partitioner partitioner;
+            int ret = partitioner.Run(config);
+
+            if (ret != 0) {
+                const char* err = "Partition run returned non-zero code";
+                char* msg = new char[strlen(err) + 1];
+                strcpy(msg, err);
+                return {ret, msg};
+            }
+
+            const char* success = "Partitioning successful";
+            char* msg = new char[strlen(success) + 1];
+            strcpy(msg, success);
+            return {0, msg};
+
+        } catch (const std::exception& e) {
+            std::string what = e.what();
+            char* msg = new char[what.length() + 1];
+            strcpy(msg, what.c_str());
+            return {1, msg};
+        }
+    }
+
+    OSRM_Result osrm_run_customize(const char* base_path, int threads) {
+        if (!base_path) {
+            const char* err = "Path cannot be null";
+            char* msg = new char[strlen(err) + 1];
+            strcpy(msg, err);
+            return {1, msg};
+        }
+
+        try {
+            osrm::customizer::CustomizationConfig config;
+            config.base_path = std::filesystem::path(base_path);
+            config.UseDefaultOutputNames(config.base_path);
+            
+            // Set thread count: use provided value if > 0, otherwise use hardware concurrency
+            if (threads > 0) {
+                config.requested_num_threads = threads;
+            } else {
+                config.requested_num_threads = std::thread::hardware_concurrency();
+            }
+
+            osrm::customizer::Customizer customizer;
+            int ret = customizer.Run(config);
+
+            if (ret != 0) {
+                const char* err = "Customize run returned non-zero code";
+                char* msg = new char[strlen(err) + 1];
+                strcpy(msg, err);
+                return {ret, msg};
+            }
+
+            const char* success = "Customization successful";
+            char* msg = new char[strlen(success) + 1];
+            strcpy(msg, success);
+            return {0, msg};
+
+        } catch (const std::exception& e) {
+            std::string what = e.what();
+            char* msg = new char[what.length() + 1];
+            strcpy(msg, what.c_str());
+            return {1, msg};
+        }
     }
 
     void osrm_free_string(char* s) {

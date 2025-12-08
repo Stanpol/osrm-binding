@@ -251,6 +251,64 @@ impl OsrmEngine {
         
         serde_json::from_str::<NearestResponse>(&result).map_err(|e| OsrmError::JsonParse(e))
     }
+
+    /// Runs the OSRM contraction process (CH) on the given file path.
+    /// This is equivalent to running `osrm-contract <path>`.
+    pub fn contract(path: &str) -> Result<String, OsrmError> {
+        // We use Osrm::contract static-like, but since it's implemented inside Osrm struct impl
+        // in lib.rs, we access it there. 
+        Osrm::contract(path, None).map_err(|e| OsrmError::ApiError(e))
+    }
+
+    /// Runs the OSRM extraction process on the given input file (e.g. .osm.pbf).
+    /// This is equivalent to running `osrm-extract <input_path> -p <profile_path>`.
+    pub fn extract(
+        input_path: &str,
+        profile_path: &str,
+        threads: Option<i32>,
+    ) -> Result<String, OsrmError> {
+        // Default values usually match standard osrm-extract defaults
+        // generate_edge_based_graph=true (needed for routing)
+        // generate_node_based_graph=true
+        // parse_conditionals=true
+        // use_metadata=true
+        // use_locations_cache=true (generally faster for large files)
+        Osrm::extract(
+            input_path, 
+            profile_path, 
+            threads, 
+            true, 
+            true, 
+            true, 
+            true, 
+            true
+        ).map_err(|e| OsrmError::ApiError(e))
+    }
+
+    /// Runs the OSRM partitioning process (MLD) on the given file path.
+    /// This is equivalent to running `osrm-partition <path>`.
+    pub fn partition(
+        path: &str,
+        threads: Option<i32>,
+        max_cell_sizes: Option<Vec<i32>>
+    ) -> Result<String, OsrmError> {
+        // We only expose common params for simplicity, others take defaults via None
+        Osrm::partition(
+            path, 
+            threads, 
+            None, // balance
+            None, // boundary_factor
+            None, // num_optimizing_cuts
+            None, // small_component_size
+            max_cell_sizes
+        ).map_err(|e| OsrmError::ApiError(e))
+    }
+
+    /// Runs the OSRM customization process (MLD) on the given file path.
+    /// This is equivalent to running `osrm-customize <path>`.
+    pub fn customize(path: &str, threads: Option<i32>) -> Result<String, OsrmError> {
+        Osrm::customize(path, threads).map_err(|e| OsrmError::ApiError(e))
+    }
 }
 
 #[cfg(test)]
