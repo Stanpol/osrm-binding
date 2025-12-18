@@ -1256,6 +1256,9 @@ extern "C" {
             config.input_path = std::filesystem::path(input_path);
             config.profile_path = std::filesystem::path(profile_path);
             
+            // Set up output file names based on input path
+            config.UseDefaultOutputNames(config.input_path);
+            
             // Set thread count: use provided value if > 0, otherwise use hardware concurrency
             if (threads > 0) {
                 config.requested_num_threads = threads;
