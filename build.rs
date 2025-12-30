@@ -74,6 +74,7 @@ fn main() {
     let dst = cmake_config.build();
 
     // 4. Compile the Rust/C++ Wrapper
+    let build_dir = out_dir.join("build");
     let mut build = cc::Build::new();
     build
         .cpp(true)
@@ -81,14 +82,33 @@ fn main() {
         .flag("-std=c++20")
         .include(dst.join("include"))
         .include(osrm_source_path.join("include"))
+        .include(build_dir.join("include"))  // Generated files like util/version.hpp
         .include(osrm_source_path.join("third_party/fmt/include"))
-        .define("FMT_HEADER_ONLY", None);
+        .include(osrm_source_path.join("third_party/libosmium/include"))
+        .include(osrm_source_path.join("third_party/sol2/include"))
+        .include(osrm_source_path.join("third_party/rapidjson/include"))
+        .include(osrm_source_path.join("third_party/protozero/include"))
+        .include(osrm_source_path.join("third_party/vtzero/include"))
+        .define("FMT_HEADER_ONLY", None)
+        .define("OSRM_PROJECT_DIR", format!("\"{}\"", osrm_source_path.to_str().unwrap()).as_str());
 
     if target_os == "macos" {
         build
             .include("/opt/homebrew/opt/boost@1.85/include")
-            .include("/opt/homebrew/opt/tbb/include");
+            .include("/opt/homebrew/opt/tbb/include")
+            .include("/opt/homebrew/opt/libosmium/include")
+            .include("/opt/homebrew/opt/lua/include/lua");
+    } else {
+        build
+            .include("/usr/local/include");
     }
+
+    // Disable specific warnings that cause errors with Boost 1.85 and modern compilers
+    build
+        .flag("-Wno-error")
+        .flag("-Wno-missing-template-arg-list-after-template-kw")
+        .flag("-Wno-unused-parameter")
+        .flag("-Wno-deprecated-copy");
 
     build.compile("osrm_wrapper");
 
@@ -100,6 +120,7 @@ fn main() {
         // Mac-specific search paths
         println!("cargo:rustc-link-search=native=/opt/homebrew/opt/boost@1.85/lib");
         println!("cargo:rustc-link-search=native=/opt/homebrew/opt/tbb/lib");
+        println!("cargo:rustc-link-search=native=/opt/homebrew/opt/lua/lib");
         println!("cargo:rustc-link-search=native=/opt/homebrew/lib");
     }
 
@@ -119,6 +140,7 @@ fn main() {
     println!("cargo:rustc-link-lib=dylib=boost_iostreams");
     println!("cargo:rustc-link-lib=dylib=tbb");
     println!("cargo:rustc-link-lib=dylib=fmt");
+    println!("cargo:rustc-link-lib=dylib=lua");
 
     // Platform specific C++ std lib
     if target_os == "macos" {
