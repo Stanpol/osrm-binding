@@ -266,22 +266,22 @@ impl OsrmEngine {
         input_path: &str,
         profile_path: &str,
         threads: Option<i32>,
+        generate_edge_based_graph: Option<bool>,
+        generate_node_based_graph: Option<bool>,
+        parse_conditionals: Option<bool>,
+        use_metadata: Option<bool>,
+        use_locations_cache: Option<bool>,
     ) -> Result<String, OsrmError> {
-        // Default values usually match standard osrm-extract defaults
-        // generate_edge_based_graph=true (needed for routing)
-        // generate_node_based_graph=true
-        // parse_conditionals=true
-        // use_metadata=true
-        // use_locations_cache=true (generally faster for large files)
+        // Default values match standard osrm-extract defaults
         Osrm::extract(
             input_path, 
             profile_path, 
             threads, 
-            true, 
-            true, 
-            true, 
-            true, 
-            true
+            generate_edge_based_graph.unwrap_or(true),
+            generate_node_based_graph.unwrap_or(true),
+            parse_conditionals.unwrap_or(true),
+            use_metadata.unwrap_or(true),
+            use_locations_cache.unwrap_or(true)
         ).map_err(|e| OsrmError::ApiError(e))
     }
 
@@ -290,16 +290,19 @@ impl OsrmEngine {
     pub fn partition(
         path: &str,
         threads: Option<i32>,
+        balance: Option<f64>,
+        boundary_factor: Option<f64>,
+        num_optimizing_cuts: Option<i32>,
+        small_component_size: Option<i32>,
         max_cell_sizes: Option<Vec<i32>>
     ) -> Result<String, OsrmError> {
-        // We only expose common params for simplicity, others take defaults via None
         Osrm::partition(
             path, 
             threads, 
-            None, // balance
-            None, // boundary_factor
-            None, // num_optimizing_cuts
-            None, // small_component_size
+            balance,
+            boundary_factor,
+            num_optimizing_cuts,
+            small_component_size,
             max_cell_sizes
         ).map_err(|e| OsrmError::ApiError(e))
     }
