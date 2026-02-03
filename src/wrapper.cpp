@@ -1368,7 +1368,7 @@ extern "C" {
         }
     }
 
-    OSRM_Result osrm_run_customize(const char* base_path, int threads) {
+    OSRM_Result osrm_run_customize(const char* base_path, int threads, const char* segment_speed_file) {
         if (!base_path) {
             const char* err = "Path cannot be null";
             char* msg = new char[strlen(err) + 1];
@@ -1380,12 +1380,17 @@ extern "C" {
             osrm::customizer::CustomizationConfig config;
             config.base_path = std::filesystem::path(base_path);
             config.UseDefaultOutputNames(config.base_path);
-            
+
             // Set thread count: use provided value if > 0, otherwise use hardware concurrency
             if (threads > 0) {
                 config.requested_num_threads = threads;
             } else {
                 config.requested_num_threads = std::thread::hardware_concurrency();
+            }
+
+            // Set segment speed file if provided
+            if (segment_speed_file != nullptr && strlen(segment_speed_file) > 0) {
+                config.updater_config.segment_speed_lookup_paths.push_back(std::string(segment_speed_file));
             }
 
             osrm::customizer::Customizer customizer;

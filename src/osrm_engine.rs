@@ -309,8 +309,8 @@ impl OsrmEngine {
 
     /// Runs the OSRM customization process (MLD) on the given file path.
     /// This is equivalent to running `osrm-customize <path>`.
-    pub fn customize(path: &str, threads: Option<i32>) -> Result<String, OsrmError> {
-        Osrm::customize(path, threads).map_err(|e| OsrmError::ApiError(e))
+    pub fn customize(path: &str, threads: Option<i32>, segment_speed_file: Option<&str>) -> Result<String, OsrmError> {
+        Osrm::customize(path, threads, segment_speed_file).map_err(|e| OsrmError::ApiError(e))
     }
 }
 

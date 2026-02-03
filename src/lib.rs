@@ -197,7 +197,8 @@ unsafe extern "C" {
     
     fn osrm_run_customize(
         base_path: *const c_char,
-        threads: i32
+        threads: i32,
+        segment_speed_file: *const c_char
     ) -> OsrmResult;
 }
 
@@ -1099,12 +1100,20 @@ impl Osrm {
         Ok(rust_str)
     }
 
-    pub fn customize(base_path: &str, threads: Option<i32>) -> Result<String, String> {
+    pub fn customize(base_path: &str, threads: Option<i32>, segment_speed_file: Option<&str>) -> Result<String, String> {
         let c_path = CString::new(base_path).map_err(|e| e.to_string())?;
         let num_threads = threads.unwrap_or(0);
 
+        let c_segment_speed_file = segment_speed_file
+            .map(|s| CString::new(s).map_err(|e| e.to_string()))
+            .transpose()?;
+
         let result = unsafe {
-            osrm_run_customize(c_path.as_ptr(), num_threads)
+            osrm_run_customize(
+                c_path.as_ptr(),
+                num_threads,
+                c_segment_speed_file.as_ref().map_or(std::ptr::null(), |s| s.as_ptr())
+            )
         };
 
         let message_ptr = result.message;
